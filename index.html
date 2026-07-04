@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vulnerability Verifier – PS4/PS5/PC</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1>Vulnerability Verifier</h1>
+<div class="subtitle">Verificacion automatica de vulnerabilidades DOM y LLInt</div>
+
+<div class="detection-panel">
+  <div class="detection-item"><span class="detection-label">Plataforma</span><span id="dtPlat" class="detection-value">---</span></div>
+  <div class="detection-item"><span class="detection-label">Firmware</span><span id="dtFW" class="detection-value">---</span></div>
+  <div class="detection-item"><span class="detection-label">Navegador</span><span id="dtBrowser" class="detection-value">---</span></div>
+  <div class="detection-item"><span class="detection-label">WebKit</span><span id="dtWebKit" class="detection-value">---</span></div>
+  <div class="detection-item"><span class="detection-label">Idioma</span><span id="dtLang" class="detection-value">---</span></div>
+</div>
+
+<div id="output" class="output-container">
+  <div class="log-entry info">[INIT] Esperando inicio de pruebas...</div>
+</div>
+
+<div id="summary" class="summary" style="display:none;">
+  <div class="log-entry info">[SUMMARY] Resultados finales:</div>
+  <div id="summaryContent"></div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
