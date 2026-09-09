@@ -591,6 +591,7 @@ let allDone = false;
                 if (!ptrish(val)) continue;
                 const inl = p.read8(val.add32(0x10));
                 const len = p.read4(val.add32(0x18)) >>> 0;
+                mark("SHAPE-SCAN", `k=${k} val=${val} inl.hi=${inl.hi} inl.low=${inl.low} len=${len}`);
                 if (inl.hi === 0 && inl.low === 2) { if (!wl) wl = val; }
                 else if (inl.hi > 0 && len === 6) { if (!wm) wm = val; }
                 else if (inl.hi > 0 && len === 0x30) { if (!wv) wv = val; }
