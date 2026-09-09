@@ -13,15 +13,26 @@ let passCount = 0, failCount = 0;
 const params = new URLSearchParams(location.search);
 const STOP_BEFORE_DOUBLE = params.get("stop") === "beforedouble";
 
-function post(tag, detail) {
-    if (tag === "Final Output") {
-        try {
-            const x = new XMLHttpRequest();
-            const webhookUrl = "https://discord.com/api/webhooks/1547263223290535978/U1mSXTwgWYGvlHISfv4l_Y59eM7Epi5VEw_u7QPvYNmBr7JqFxg9UaITFTMnx2Lv7hZ7";
-            x.open("POST", webhookUrl, true);
-            x.setRequestHeader("Content-Type", "application/json");
-            x.send(JSON.stringify({ content: detail }));
-        } catch (e) { }
+function mark(tag, detail) {
+    const raw = detail;
+    detail = terse(detail);
+    lines.push(tag + (detail == null || detail === "" ? "" : "  " + detail));
+    
+    const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    outEl.innerHTML = lines.map(function (l) {
+        l = esc(l);
+        const c = /FAIL|ERROR|THREW|REBOOT|MISS|LOST|POISON|TIMEOUT|MISMATCH|ABORTED/i.test(l) ? "bad"
+                : /WARN|SKIP|REFUSED|COMMITTED|DIRTY/i.test(l) ? "warn"
+                : /\bOK\b|PASS|ACHIEVED|RUNNING|ARMED/i.test(l) ? "ok" : "";
+        return c ? '<span class="' + c + '">' + l + "</span>" : l;
+    }).join("\n");
+    outEl.scrollTop = outEl.scrollHeight;
+
+    if (tag === "PROOF-SUMMARY-FINAL") {
+        const fullLog = "
+\n" + líneas.join("\n") + "\n
+";
+        post("Final Output", fullLog);
     }
 }
 
