@@ -13,27 +13,14 @@ let passCount = 0, failCount = 0;
 const params = new URLSearchParams(location.search);
 const STOP_BEFORE_DOUBLE = params.get("stop") === "beforedouble";
 
-function mark(tag, detail) {
-    const raw = detail;
-    detail = terse(detail);
-    lines.push(tag + (detail == null || detail === "" ? "" : "  " + detail));
-    
-    const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-    outEl.innerHTML = lines.map(function (l) {
-        l = esc(l);
-        const c = /FAIL|ERROR|THREW|REBOOT|MISS|LOST|POISON|TIMEOUT|MISMATCH|ABORTED/i.test(l) ? "bad"
-                : /WARN|SKIP|REFUSED|COMMITTED|DIRTY/i.test(l) ? "warn"
-                : /\bOK\b|PASS|ACHIEVED|RUNNING|ARMED/i.test(l) ? "ok" : "";
-        return c ? '<span class="' + c + '">' + l + "</span>" : l;
-    }).join("\n");
-    outEl.scrollTop = outEl.scrollHeight;
-
-    if (tag === "PROOF-SUMMARY-FINAL") {
-        const fullLog = "
-\n" + líneas.join("\n") + "\n
-";
-        post("Final Output", fullLog);
-    }
+function post(tag, detail) {
+    try {
+        const x = new XMLHttpRequest();
+        x.open("POST", "t", true);
+        x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        x.send("PS4-S10&tag=" + encodeURIComponent(tag)
+             + "&detail=" + encodeURIComponent(String(detail == null ? "" : detail)));
+    } catch (e) { }
 }
 
 const VERBOSE = params.get("verbose") === "1";
