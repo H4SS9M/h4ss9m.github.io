@@ -526,8 +526,9 @@ let allDone = false;
             const pending = new Map();
             w.onmessage = function (e) {
                 const d = e.data || {};
-                const slot = pending.get(d.id);
-                if (!slot) return;
+                if (d.type === "info") {
+                    mark("WORKER-INFO", name + " " + d.value);
+                    return;
                 pending.delete(d.id);
                 if (slot.timer) clearTimeout(slot.timer);
                 if (d.type === "err") slot.reject(new Error(String(d.value)));
