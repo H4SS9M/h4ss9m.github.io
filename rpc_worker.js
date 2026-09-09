@@ -188,3 +188,4 @@ self.onmessage = function (e) {
         out = { id: id, type: "err", value: (err && err.message) ? err.message : String(err) };
     }
         self.postMessage(out);
+};
