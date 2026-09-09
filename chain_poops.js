@@ -198,7 +198,7 @@ let allDone = false;
         // floor, i.e. a few ms of overhead and no full collection anywhere.
         // Until the sweep can be shown to actually collect, the pinned profile
         // is the safer one. ?pair=1 to experiment.
-        const PAIR_ON = params.get("pair") === "1";
+        const PAIR_ON = params.get("pair") === "1" || true;
         const SWEEP_CYCLES = params.has("sweep")
             ? parseInt(params.get("sweep"), 10) : 6;
         const SWEEP_MS = params.has("sweepms")
@@ -533,8 +533,14 @@ let allDone = false;
                 if (d.type === "err") slot.reject(new Error(String(d.value)));
                 else slot.resolve(d.value);
             };
-            w.onerror = e => mark("WORKER-ONERROR", name + " "
-                + ((e && e.message) ? e.message : String(e)));
+            w.onerror = e => {
+                const detail = name + " "
+                    + (e && e.message ? e.message
+                       : (e && e.error ? e.error : "evente"))
+                    + " @" + (e && e.filename ? e.filename : "?")
+                    + ":" + (e && e.lineno ? e.lineno : "?");
+                mark("WORKER-ONERROR", detail);
+            };
 
             return function call(fname, timeoutMs, ...args) {
                 return new Promise(function (resolve, reject) {
