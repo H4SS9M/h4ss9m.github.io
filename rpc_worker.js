@@ -1,5 +1,14 @@
 "use strict";
 
+self.onerror = function (e) {
+    self.postMessage({
+        id: -1,
+        type: "err",
+        value: "worker-error: " + (e.message || "unknown") +
+               " @ " + (e.filename || "?") + ":" + (e.lineno || "?")
+    });
+};
+
 let marker_arr = new Uint32Array(new ArrayBuffer(0x10));
 
 const transfer = [];
