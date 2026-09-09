@@ -187,5 +187,10 @@ self.onmessage = function (e) {
     } catch (err) {
         out = { id: id, type: "err", value: (err && err.message) ? err.message : String(err) };
     }
+    if (transfer.length) {
+        self.postMessage(out, transfer);
+        transfer.length = 0;
+    } else {
         self.postMessage(out);
+    }
 };
