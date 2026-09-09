@@ -531,6 +531,9 @@ let allDone = false;
                 if (d.type === "info") {
                     mark("WORKER-INFO", name + " " + d.value);
                     return;
+                }
+                const slot = pending.get(d.id);
+                if (!slot) return;
                 pending.delete(d.id);
                 if (slot.timer) clearTimeout(slot.timer);
                 if (d.type === "err") slot.reject(new Error(String(d.value)));
