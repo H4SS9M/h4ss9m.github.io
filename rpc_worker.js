@@ -1,5 +1,6 @@
 "use strict";
 
+self.postMessage({ id: -1, type: "info", value: "worker-loaded" });
 self.onerror = function (e) {
     self.postMessage({
         id: -1,
