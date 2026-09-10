@@ -2,136 +2,271 @@
 <html lang="en" manifest="cache.appcache">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ps4 poops &middot; mansoor0x</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>H4SS9M · Poops run</title>
 <style>
   :root {
-    --bg-deep: #050507;
-    --bg-card: #0c0d12;
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-glow: rgba(99, 102, 241, 0.3);
-    --accent: #818cf8;
-    --accent-glow: rgba(129, 140, 248, 0.2);
-    --text-main: #f3f4f6;
-    --text-muted: #9ca3af;
-    --text-dim: #4b5563;
+    --bg: #06070a;
+    --line: rgba(255,255,255,.07);
+    --accent: #7c5cff;
+    --accent2: #22d3ee;
+    --text: #eaeaf0;
+    --muted: #8a90a3;
+    --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
   }
-
+  * { box-sizing: border-box; }
   html, body {
-    margin: 0;
-    padding: 0;
-    background: var(--bg-deep);
-    color: var(--text-main);
-    font: 14px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow-x: hidden;
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column;
+    overflow: hidden;
   }
-
-  /* Ambient background glow */
-  body::before {
-    content: '';
-    position: absolute;
-    width: 300px;
-    height: 300px;
-    background: var(--accent-glow);
-    filter: blur(100px);
-    border-radius: 50%;
-    z-index: 0;
-    pointer-events: none;
+  header {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    background: #0a0c12;
   }
-
-  #container {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 440px;
-    margin: 20px;
-    padding: 32px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-    backdrop-filter: blur(20px);
-    box-sizing: border-box;
+  .brand {
+    font-size: 12px; font-weight: 800; letter-spacing: .24em;
+    text-transform: uppercase; color: var(--accent);
   }
-
-  #brand {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.25em;
+  .sep { width: 1px; height: 18px; background: var(--line); }
+  #state { font-size: 12px; color: var(--warn); letter-spacing: .06em; text-transform: lowercase; }
+  #tid   { font-size: 11px; color: var(--muted); margin-left: auto; letter-spacing: .1em; text-transform: uppercase; }
+  #tg    { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+  #tg.on { color: var(--ok); }
+  main { flex: 1 1 auto; overflow: hidden; }
+  pre#out {
+    margin: 0; padding: 16px 20px; height: 100%; overflow: auto;
+    font: 12.5px/1.45 "Consolas", "SF Mono", ui-monospace, monospace;
+    white-space: pre-wrap; word-break: break-word;
+    background: #06070a;
+  }
+  pre#out span.ok    { color: var(--ok); }
+  pre#out span.warn  { color: var(--warn); }
+  pre#out span.bad   { color: var(--bad); }
+  footer {
+    flex: 0 0 auto;
+    display: flex; gap: 8px; padding: 8px 18px;
+    border-top: 1px solid var(--line); background: #0a0c12;
+    font-size: 11px; color: var(--muted); letter-spacing: .08em;
     text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
-
-  #brand::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, var(--border-color), transparent);
+  footer button {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--text); padding: 6px 12px; border-radius: 6px;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    cursor: pointer;
   }
-
-  #wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  #state {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    color: var(--text-main);
-    text-transform: lowercase;
-  }
-
-  #out {
-    white-space: pre-wrap;
-    font: 12px/1.6 Consolas, "Courier New", monospace;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 14px;
-    max-height: 300px;
-    overflow-y: auto;
-    color: var(--text-muted);
-    text-transform: none;
-  }
-
-  /* Custom Scrollbar for #out */
-  #out::-webkit-scrollbar {
-    width: 6px;
-  }
-  #out::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  #out::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 4px;
-  }
-  #out::-webkit-scrollbar-thumb:hover {
-    background: var(--text-dim);
-  }
-
-  .ok { color: var(--text-main); }
-  .bad { color: #f87171; text-decoration: underline; text-decoration-color: rgba(248, 113, 113, 0.4); }
-  .warn { color: #fbbf24; }
+  footer button:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
-<div id="container">
-  <div id="brand">mansoor0x</div>
-  <div id="wrap">
-    <div id="state">loading poops chain...</div>
-    <div id="out"></div>
-  </div>
-</div>
-<script type="module">import "./chain_poops.js";</script>
+<header>
+  <div class="brand">H4SS9M</div>
+  <div class="sep"></div>
+  <div id="state">booting…</div>
+  <div id="tid">tester: —</div>
+  <div id="tg">tg: —</div>
+</header>
+
+<main><pre id="out"></pre></main>
+
+<footer>
+  <button id="btn-send">send now</button>
+  <button id="btn-clear">clear</button>
+  <span style="margin-left:auto">poops chain · 13.02/13.04</span>
+</footer>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DEL FORWARDER
+// ══════════════════════════════════════════════════════════════════════
+var TG_TOKEN  = "PEGA_AQUI_TU_BOT_TOKEN";
+var TG_CHAT   = "PEGA_AQUI_TU_CHAT_ID";
+var DC_WEBHOOK = "PEGA_AQUI_TU_DISCORD_WEBHOOK";
+var FORWARD_EACH_MESSAGE = false;   // true → envía cada línea (mucho tráfico)
+var FORWARD_ON_PASS      = true;    // envía al detectar PASS
+var FORWARD_ON_FAIL      = true;    // envía al detectar FAIL
+var FORWARD_ON_FINAL     = true;    // envía al finalizar todo
+
+// ══════════════════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════════
+var params    = new URLSearchParams(location.search);
+var testerId  = (params.get("id")   || "UNK").toUpperCase();
+var testerNote = params.get("note") || "";
+
+var outEl     = document.getElementById("out");
+var stateEl   = document.getElementById("state");
+var tidEl     = document.getElementById("tid");
+var tgEl      = document.getElementById("tg");
+
+tidEl.textContent = "tester: " + testerId + (testerNote ? " (" + testerNote + ")" : "");
+
+var lines = [];
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function paint() {
+  outEl.innerHTML = lines.map(function (l) {
+    l = esc(l);
+    var c = /FAIL|ERROR|THREW|REBOOT|MISS|LOST|POISON|TIMEOUT|MISMATCH|ABORTED/i.test(l) ? "bad"
+          : /WARN|SKIP|REFUSED|COMMITTED|DIRTY/i.test(l) ? "warn"
+          : /\bOK\b|PASS|ACHIEVED|RUNNING|ARMED|UP\b|JAILBROKEN|TRIPLET/i.test(l) ? "ok"
+          : "";
+    return c ? '<span class="'+c+'">'+l+'</span>' : l;
+  }).join("\n");
+  outEl.scrollTop = outEl.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  FORWARDERS
+// ══════════════════════════════════════════════════════════════════════
+var TG_ENABLED = TG_TOKEN.length > 20 && TG_CHAT.length > 3;
+var DC_ENABLED = DC_WEBHOOK.indexOf("http") === 0;
+
+if (TG_ENABLED || DC_ENABLED) {
+  tgEl.textContent = "tg:" + (TG_ENABLED ? "on" : "off") + " dc:" + (DC_ENABLED ? "on" : "off");
+  tgEl.className = "on";
+} else {
+  tgEl.textContent = "tg:off dc:off";
+}
+
+var tgQueue = [], tgSending = false;
+var dcQueue = [], dcSending = false;
+
+function tgSplit(text) {
+  var MAX = 3600, out = [];
+  for (var i = 0; i < text.length; i += MAX) out.push(text.slice(i, i+MAX));
+  return out;
+}
+
+function tgPush(text) {
+  if (!TG_ENABLED) return;
+  tgSplit(text).forEach(function (c) { tgQueue.push(c); });
+  tgFlush();
+}
+function tgFlush() {
+  if (!TG_ENABLED || tgSending || !tgQueue.length) return;
+  tgSending = true;
+  var chunk = tgQueue.shift();
+  try {
+    var x = new XMLHttpRequest();
+    x.open("POST", "https://api.telegram.org/bot" + TG_TOKEN + "/sendMessage", true);
+    x.setRequestHeader("Content-Type", "application/json");
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status !== 200 && x.status !== 0) tgQueue.unshift(chunk);
+      tgSending = false;
+      setTimeout(tgFlush, 1100);
+    };
+    x.send(JSON.stringify({
+      chat_id: TG_CHAT,
+      text: "<pre>" + esc(chunk) + "</pre>",
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    }));
+  } catch (e) {
+    tgSending = false;
+  }
+}
+
+function dcPush(text) {
+  if (!DC_ENABLED) return;
+  dcQueue.push(text);
+  dcFlush();
+}
+function dcFlush() {
+  if (!DC_ENABLED || dcSending || !dcQueue.length) return;
+  dcSending = true;
+  var chunk = dcQueue.shift();
+  try {
+    var x = new XMLHttpRequest();
+    x.open("POST", DC_WEBHOOK, true);
+    x.setRequestHeader("Content-Type", "application/json");
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      dcSending = false;
+      setTimeout(dcFlush, 600);
+    };
+    x.send(JSON.stringify({
+      content: "**" + testerId + "** · ```\n" + chunk.slice(0, 1900) + "\n```"
+    }));
+  } catch (e) {
+    dcSending = false;
+  }
+}
+
+function forwardHeader() {
+  var hdr = "== H4SS9M · " + testerId + (testerNote ? " (" + testerNote + ")" : "") + " ==\n"
+    + "UA: " + navigator.userAgent + "\n"
+    + "URL: " + location.href + "\n"
+    + "TIME: " + new Date().toISOString() + "\n";
+  tgPush(hdr);
+  dcPush(hdr);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  LOG
+// ══════════════════════════════════════════════════════════════════════
+var lastForwarded = 0;
+
+function logLine(full) {
+  lines.push(full);
+  paint();
+  if (FORWARD_EACH_MESSAGE) { tgPush(full); dcPush(full); return; }
+
+  if (FORWARD_ON_FAIL && /FAIL|ERROR|THREW|MISMATCH|TIMEOUT/i.test(full)) {
+    tgPush(full); dcPush(full);
+  } else if (FORWARD_ON_PASS && /PASS|JAILBROKEN|KERNEL-PATCHED|PAYLOAD-RUNNING|TRIPLETS/i.test(full)) {
+    tgPush(full); dcPush(full);
+  }
+}
+
+// Exponer al exploit
+window.mark = function (tag, detail) {
+  var full = tag + (detail == null || detail === "" ? "" : "  " + detail);
+  logLine(full);
+  // Truncate to avoid unbounded growth
+  if (lines.length > 4000) lines.splice(0, lines.length - 3000);
+};
+window.state = function (t, c) {
+  stateEl.textContent = t;
+  stateEl.className = c || "";
+};
+window.trace = function (tag, detail) { /* no-op unless verbose */ };
+window.post  = function () { /* unused; forwarders handle it */ };
+window.clearLog = function () { lines = []; outEl.textContent = ""; };
+window.lines = lines;
+
+document.getElementById("btn-clear").addEventListener("click", window.clearLog);
+document.getElementById("btn-send").addEventListener("click", function () {
+  var full = "== MANUAL DUMP " + testerId + " ==\n" + lines.join("\n");
+  tgPush(full);
+  dcPush("== MANUAL DUMP " + testerId + " ==\n" + lines.join("\n").slice(0, 1900));
+});
+
+forwardHeader();
+
+// Marca final: envía todo
+window.addEventListener("beforeunload", function () {
+  if (FORWARD_ON_FINAL && lines.length) {
+    tgPush("== FINAL " + testerId + " ==\n" + lines.join("\n"));
+    dcPush("== FINAL " + testerId + " ==\n" + lines.join("\n").slice(0,1900));
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+//  ARRANQUE DEL EXPLOIT
+// ══════════════════════════════════════════════════════════════════════
+</script>
+
+<!-- Carga el exploit. Este debe exportar window.mark / window.state o usar las funciones globales -->
+<script type="module" src="./chain_poops.js"></script>
 </body>
 </html>
