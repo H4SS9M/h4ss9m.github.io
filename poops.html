@@ -19,38 +19,32 @@
     margin: 0; padding: 0; height: 100%;
     background: var(--bg); color: var(--text);
     font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
-    display: flex; flex-direction: column;
-    overflow: hidden;
+    display: flex; flex-direction: column; overflow: hidden;
   }
   header {
-    flex: 0 0 auto;
-    display: flex; align-items: center; gap: 14px;
-    padding: 10px 18px;
-    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
+    padding: 10px 18px; border-bottom: 1px solid var(--line);
     background: #0a0c12;
   }
-  .brand {
-    font-size: 12px; font-weight: 800; letter-spacing: .24em;
-    text-transform: uppercase; color: var(--accent);
-  }
-  .sep { width: 1px; height: 18px; background: var(--line); }
+  .brand { font-size: 12px; font-weight: 800; letter-spacing: .24em;
+           text-transform: uppercase; color: var(--accent); }
+  .sep   { width: 1px; height: 18px; background: var(--line); }
   #state { font-size: 12px; color: var(--warn); letter-spacing: .06em; text-transform: lowercase; }
-  #tid   { font-size: 11px; color: var(--muted); margin-left: auto; letter-spacing: .1em; text-transform: uppercase; }
+  #tid   { font-size: 11px; color: var(--muted); margin-left: auto;
+           letter-spacing: .1em; text-transform: uppercase; }
   #tg    { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
   #tg.on { color: var(--ok); }
-  main { flex: 1 1 auto; overflow: hidden; }
+  main   { flex: 1 1 auto; overflow: hidden; }
   pre#out {
     margin: 0; padding: 16px 20px; height: 100%; overflow: auto;
     font: 12.5px/1.45 "Consolas", "SF Mono", ui-monospace, monospace;
-    white-space: pre-wrap; word-break: break-word;
-    background: #06070a;
+    white-space: pre-wrap; word-break: break-word; background: #06070a;
   }
-  pre#out span.ok    { color: var(--ok); }
-  pre#out span.warn  { color: var(--warn); }
-  pre#out span.bad   { color: var(--bad); }
+  pre#out span.ok   { color: var(--ok); }
+  pre#out span.warn { color: var(--warn); }
+  pre#out span.bad  { color: var(--bad); }
   footer {
-    flex: 0 0 auto;
-    display: flex; gap: 8px; padding: 8px 18px;
+    flex: 0 0 auto; display: flex; gap: 8px; padding: 8px 18px;
     border-top: 1px solid var(--line); background: #0a0c12;
     font-size: 11px; color: var(--muted); letter-spacing: .08em;
     text-transform: uppercase;
@@ -78,57 +72,36 @@
 <footer>
   <button id="btn-send">send now</button>
   <button id="btn-clear">clear</button>
-  <span style="margin-left:auto">poops chain · 13.02/13.04</span>
+  <span style="margin-left:auto">poops chain · 13.02 / 13.04</span>
 </footer>
 
 <script>
 // ══════════════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN DEL FORWARDER
+//  CONFIG
 // ══════════════════════════════════════════════════════════════════════
-var TG_TOKEN  = "8520998420:AAFMs7t2Sbnk8U6baZrEE5dUNVncTdQ__g0";
-var TG_CHAT   = "7068507380";
-var DC_WEBHOOK = "https://discord.com/api/webhooks/1547263223290535978/U1mSXTwgWYGvlHISfv4l_Y59eM7Epi5VEw_u7QPvYNmBr7JqFxg9UaITFTMnx2Lv7hZ7";
-var FORWARD_EACH_MESSAGE = false;   // true → envía cada línea (mucho tráfico)
-var FORWARD_ON_PASS      = true;    // envía al detectar PASS
-var FORWARD_ON_FAIL      = true;    // envía al detectar FAIL
-var FORWARD_ON_FINAL     = true;    // envía al finalizar todo
+var TG_TOKEN    = "PEGA_AQUI_TU_BOT_TOKEN";
+var TG_CHAT     = "PEGA_AQUI_TU_CHAT_ID";
+var DC_WEBHOOK  = "PEGA_AQUI_TU_DISCORD_WEBHOOK";
+
+var TG_ENABLED  = TG_TOKEN.length > 20 && TG_CHAT.length > 3;
+var DC_ENABLED  = DC_WEBHOOK.indexOf("http") === 0;
+
+// Filtro para no saturar: solo reenvía líneas relevantes
+var FORWARD_RE  = /PASS|FAIL|ERROR|THREW|MISMATCH|TIMEOUT|JAILBROKEN|KERNEL-PATCHED|PAYLOAD-RUNNING|TRIPLETS|PAIR-STATUS|BASES|UAF-ARMED|DOUBLE-FREE|TRIPLE-FREE|FIRMWARE|H4SS9M/i;
 
 // ══════════════════════════════════════════════════════════════════════
-//  ESTADO GLOBAL
+//  ESTADO
 // ══════════════════════════════════════════════════════════════════════
-var params    = new URLSearchParams(location.search);
-var testerId  = (params.get("id")   || "UNK").toUpperCase();
+var params     = new URLSearchParams(location.search);
+var testerId   = (params.get("id") || "UNK").toUpperCase();
 var testerNote = params.get("note") || "";
 
-var outEl     = document.getElementById("out");
-var stateEl   = document.getElementById("state");
-var tidEl     = document.getElementById("tid");
-var tgEl      = document.getElementById("tg");
+var outEl   = document.getElementById("out");
+var stateEl = document.getElementById("state");
+var tidEl   = document.getElementById("tid");
+var tgEl    = document.getElementById("tg");
 
 tidEl.textContent = "tester: " + testerId + (testerNote ? " (" + testerNote + ")" : "");
-
-var lines = [];
-
-function esc(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
-function paint() {
-  outEl.innerHTML = lines.map(function (l) {
-    l = esc(l);
-    var c = /FAIL|ERROR|THREW|REBOOT|MISS|LOST|POISON|TIMEOUT|MISMATCH|ABORTED/i.test(l) ? "bad"
-          : /WARN|SKIP|REFUSED|COMMITTED|DIRTY/i.test(l) ? "warn"
-          : /\bOK\b|PASS|ACHIEVED|RUNNING|ARMED|UP\b|JAILBROKEN|TRIPLET/i.test(l) ? "ok"
-          : "";
-    return c ? '<span class="'+c+'">'+l+'</span>' : l;
-  }).join("\n");
-  outEl.scrollTop = outEl.scrollHeight;
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  FORWARDERS
-// ══════════════════════════════════════════════════════════════════════
-var TG_ENABLED = TG_TOKEN.length > 20 && TG_CHAT.length > 3;
-var DC_ENABLED = DC_WEBHOOK.indexOf("http") === 0;
 
 if (TG_ENABLED || DC_ENABLED) {
   tgEl.textContent = "tg:" + (TG_ENABLED ? "on" : "off") + " dc:" + (DC_ENABLED ? "on" : "off");
@@ -137,18 +110,20 @@ if (TG_ENABLED || DC_ENABLED) {
   tgEl.textContent = "tg:off dc:off";
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  FORWARDERS
+// ══════════════════════════════════════════════════════════════════════
 var tgQueue = [], tgSending = false;
 var dcQueue = [], dcSending = false;
 
-function tgSplit(text) {
-  var MAX = 3600, out = [];
-  for (var i = 0; i < text.length; i += MAX) out.push(text.slice(i, i+MAX));
-  return out;
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
 function tgPush(text) {
   if (!TG_ENABLED) return;
-  tgSplit(text).forEach(function (c) { tgQueue.push(c); });
+  var MAX = 3600;
+  for (var i = 0; i < text.length; i += MAX) tgQueue.push(text.slice(i, i+MAX));
   tgFlush();
 }
 function tgFlush() {
@@ -171,9 +146,7 @@ function tgFlush() {
       parse_mode: "HTML",
       disable_web_page_preview: true
     }));
-  } catch (e) {
-    tgSending = false;
-  }
+  } catch (e) { tgSending = false; }
 }
 
 function dcPush(text) {
@@ -197,76 +170,82 @@ function dcFlush() {
     x.send(JSON.stringify({
       content: "**" + testerId + "** · ```\n" + chunk.slice(0, 1900) + "\n```"
     }));
-  } catch (e) {
-    dcSending = false;
-  }
+  } catch (e) { dcSending = false; }
 }
 
 function forwardHeader() {
   var hdr = "== H4SS9M · " + testerId + (testerNote ? " (" + testerNote + ")" : "") + " ==\n"
-    + "UA: " + navigator.userAgent + "\n"
-    + "URL: " + location.href + "\n"
-    + "TIME: " + new Date().toISOString() + "\n";
+          + "UA: "   + navigator.userAgent + "\n"
+          + "URL: "  + location.href + "\n"
+          + "TIME: " + new Date().toISOString() + "\n";
   tgPush(hdr);
   dcPush(hdr);
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  LOG
+//  OBSERVADOR DEL LOG (captura cualquier cosa que poops.js escriba)
 // ══════════════════════════════════════════════════════════════════════
-var lastForwarded = 0;
+var lastText = "";
 
-function logLine(full) {
-  lines.push(full);
-  paint();
-  if (FORWARD_EACH_MESSAGE) { tgPush(full); dcPush(full); return; }
+function checkLog() {
+  var cur = outEl.textContent || "";
+  if (cur.length <= lastText.length) return;
 
-  if (FORWARD_ON_FAIL && /FAIL|ERROR|THREW|MISMATCH|TIMEOUT/i.test(full)) {
-    tgPush(full); dcPush(full);
-  } else if (FORWARD_ON_PASS && /PASS|JAILBROKEN|KERNEL-PATCHED|PAYLOAD-RUNNING|TRIPLETS/i.test(full)) {
-    tgPush(full); dcPush(full);
+  var delta = cur.slice(lastText.length);
+  lastText = cur;
+
+  var newLines = delta.split("\n").filter(function (l) { return l.trim(); });
+  newLines.forEach(function (l) {
+    if (FORWARD_RE.test(l)) {
+      tgPush(l);
+      dcPush(l);
+    }
+  });
+
+  // Actualizar el estado del header con la última línea
+  if (newLines.length) {
+    var last = newLines[newLines.length - 1].trim();
+    if (last.length < 120) stateEl.textContent = last.toLowerCase();
   }
 }
 
-// Exponer al exploit
-window.mark = function (tag, detail) {
-  var full = tag + (detail == null || detail === "" ? "" : "  " + detail);
-  logLine(full);
-  // Truncate to avoid unbounded growth
-  if (lines.length > 4000) lines.splice(0, lines.length - 3000);
-};
-window.state = function (t, c) {
-  stateEl.textContent = t;
-  stateEl.className = c || "";
-};
-window.trace = function (tag, detail) { /* no-op unless verbose */ };
-window.post  = function () { /* unused; forwarders handle it */ };
-window.clearLog = function () { lines = []; outEl.textContent = ""; };
-window.lines = lines;
+// Poll cada 400ms (barato, no bloquea)
+setInterval(checkLog, 400);
 
-document.getElementById("btn-clear").addEventListener("click", window.clearLog);
+// También observador por si hay cambios rápidos
+if (window.MutationObserver) {
+  new MutationObserver(checkLog).observe(outEl, {
+    childList: true, characterData: true, subtree: true
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  BOTONES
+// ══════════════════════════════════════════════════════════════════════
+document.getElementById("btn-clear").addEventListener("click", function () {
+  outEl.textContent = "";
+  lastText = "";
+});
 document.getElementById("btn-send").addEventListener("click", function () {
-  var full = "== MANUAL DUMP " + testerId + " ==\n" + lines.join("\n");
+  var full = "== MANUAL DUMP " + testerId + " ==\n" + outEl.textContent;
   tgPush(full);
-  dcPush("== MANUAL DUMP " + testerId + " ==\n" + lines.join("\n").slice(0, 1900));
+  dcPush(full);
 });
 
-forwardHeader();
-
-// Marca final: envía todo
+// Enviar todo al cerrar
 window.addEventListener("beforeunload", function () {
-  if (FORWARD_ON_FINAL && lines.length) {
-    tgPush("== FINAL " + testerId + " ==\n" + lines.join("\n"));
-    dcPush("== FINAL " + testerId + " ==\n" + lines.join("\n").slice(0,1900));
-  }
+  var full = "== FINAL " + testerId + " ==\n" + outEl.textContent;
+  tgPush(full);
+  dcPush(full);
 });
 
 // ══════════════════════════════════════════════════════════════════════
-//  ARRANQUE DEL EXPLOIT
+//  CABECERA + ARRANQUE DEL EXPLOIT
 // ══════════════════════════════════════════════════════════════════════
+forwardHeader();
 </script>
 
-<!-- Carga el exploit. Este debe exportar window.mark / window.state o usar las funciones globales -->
+<!-- El exploit -->
 <script type="module" src="./chain_poops.js"></script>
 </body>
 </html>
