@@ -2,237 +2,145 @@
 <html lang="en" manifest="cache.appcache">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ps4 jailbreak &middot; mansoor0x</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>H4SS9M · Poops 13.02/13.04</title>
 <style>
   :root {
-    --bg-deep: #050507;
-    --bg-card: #0c0d12;
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-glow: rgba(99, 102, 241, 0.3);
-    --accent: #818cf8;
-    --accent-glow: rgba(129, 140, 248, 0.2);
-    --text-main: #f3f4f6;
-    --text-muted: #9ca3af;
-    --text-dim: #4b5563;
+    --bg: #06070a;
+    --card: #0d0f14;
+    --line: rgba(255,255,255,.07);
+    --accent: #7c5cff;
+    --accent2: #22d3ee;
+    --text: #eaeaf0;
+    --muted: #8a90a3;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
   }
-
+  * { box-sizing: border-box; }
   html, body {
-    margin: 0;
-    padding: 0;
-    background: var(--bg-deep);
-    color: var(--text-main);
-    font: 14px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow-x: hidden;
+    margin: 0; padding: 0; min-height: 100vh;
+    background: radial-gradient(1200px 800px at 50% -10%, rgba(124,92,255,.18), transparent 60%), var(--bg);
+    color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex; align-items: center; justify-content: center;
   }
-
-  /* Ambient background glow */
-  body::before {
-    content: '';
-    position: absolute;
-    width: 300px;
-    height: 300px;
-    background: var(--accent-glow);
-    filter: blur(100px);
-    border-radius: 50%;
-    z-index: 0;
-    pointer-events: none;
+  #card {
+    width: 100%; max-width: 460px; margin: 24px; padding: 28px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 24px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02) inset;
   }
-
-  #container {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 440px;
-    margin: 20px;
-    padding: 32px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-    backdrop-filter: blur(20px);
-    box-sizing: border-box;
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 12px; font-weight: 800; letter-spacing: .28em;
+    text-transform: uppercase; color: var(--accent);
+    margin-bottom: 22px;
   }
-
-  #brand {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.25em;
+  .brand::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--line), transparent);
+  }
+  h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.02em; }
+  p.sub { margin: 0 0 22px; font-size: 13px; color: var(--muted); }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .row label {
+    flex: 0 0 90px; font-size: 12px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em; padding-top: 8px;
+  }
+  .row input {
+    flex: 1; background: #06070a; border: 1px solid var(--line);
+    color: var(--text); padding: 8px 10px; border-radius: 8px;
+    font: 13px/1.2 "Consolas", monospace;
+  }
+  .row input:focus { outline: 1px solid var(--accent); }
+  button {
+    width: 100%; padding: 14px; margin-top: 14px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border: 0; border-radius: 10px; color: #06070a;
+    font-weight: 800; letter-spacing: .06em; cursor: pointer;
     text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
-
-  #brand::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, var(--border-color), transparent);
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #info {
+    margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+    background: rgba(0,0,0,.3); border: 1px solid var(--line);
+    font: 12px/1.5 "Consolas", monospace; color: var(--muted);
+    white-space: pre-wrap;
   }
-
-  #wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  footer {
+    margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 11px; color: var(--muted); text-align: center;
+    letter-spacing: .1em; text-transform: uppercase;
   }
-
-  #state {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    color: var(--text-main);
-    text-transform: lowercase;
-  }
-
-  #det {
-    font-size: 13px;
-    color: var(--text-muted);
-    text-transform: lowercase;
-    padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-  }
-
-  #det b {
-    color: var(--text-main);
-    font-weight: 600;
-  }
-
-  #cache {
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 4px;
-    min-height: 18px;
-    text-transform: lowercase;
-    transition: color 0.3s ease;
-  }
-
-  #cache.cacheok {
-    color: var(--accent);
-  }
-
-  .ok { color: var(--text-main); }
-  .bad { color: #f87171; text-decoration: underline; text-decoration-color: rgba(248, 113, 113, 0.4); }
-  .warn { color: #fbbf24; }
 </style>
 </head>
 <body>
-<div id="container">
-  <div id="brand">mansoor0x</div>
-  <div id="wrap">
-    <div id="state">detecting firmware...</div>
-    <div id="det"></div>
-    <div id="cache"></div>
+<div id="card">
+  <div class="brand">H4SS9M</div>
+  <h1>Poops chain</h1>
+  <p class="sub">Firmware 13.02 / 13.04 · userland + kernel</p>
+
+  <div class="row">
+    <label for="tid">Tester</label>
+    <input id="tid" placeholder="T01" maxlength="8" autocomplete="off">
   </div>
+  <div class="row">
+    <label for="note">Note</label>
+    <input id="note" placeholder="optional" maxlength="32" autocomplete="off">
+  </div>
+
+  <button id="go">continue</button>
+  <div id="info">detecting firmware…</div>
+
+  <footer>developed by H4SS9M</footer>
 </div>
 
 <script>
 (function () {
-    var stateEl = document.getElementById("state");
-    var detEl = document.getElementById("det");
-    var cacheEl = document.getElementById("cache");
-    function setState(t, c) { stateEl.textContent = t.toLowerCase(); stateEl.className = c || ""; }
-    function setCache(t, ok) { cacheEl.textContent = t.toLowerCase(); cacheEl.className = ok ? "cacheok" : ""; }
-    var params = new URLSearchParams(location.search);
+  var params = new URLSearchParams(location.search);
+  var info = document.getElementById("info");
+  var tid = document.getElementById("tid");
+  var note = document.getElementById("note");
+  var go = document.getElementById("go");
 
-    var key = null, fwnum = null;
-    var m = /PlayStation\s+4[\/ ](\d+)\.(\d+)/.exec(navigator.userAgent);
-    if (m) {
-        var minor = parseInt(m[2], 16);
-        var ms = minor.toString(16);
-        if (ms.length < 2) ms = "0" + ms;
-        key = m[1] + "." + ms;
-        fwnum = parseInt(m[1], 10) * 100 + parseInt(ms, 10);
-    }
-    var bug = null, why = "";
-    var forced = params.get("bug");
-    if (forced === "lapse" || forced === "poops") {
-        bug = forced; why = "forced via ?bug=" + forced;
-    } else if (!key) {
-        why = "user-agent is not a playstation 4";
-    } else if (fwnum <= 1202) {
-        bug = "lapse"; why = key + " <= 12.02";
-    } else if (fwnum >= 1250) {
-        bug = "poops"; why = key + " >= 12.50";
-    } else {
-        why = key + " -- no working bug (lapse ends at 12.02, poops needs 12.50)";
-    }
-    detEl.innerHTML = "firmware <b>" + (key || "unknown") + "</b>"
-        + " &middot; bug <b>" + (bug || "none") + "</b> &middot; " + why;
+  // Restore previous tester id
+  try {
+    var saved = localStorage.getItem("h4ss9m_tester");
+    if (saved) tid.value = saved;
+  } catch (e) {}
+  if (params.get("id")) tid.value = params.get("id");
 
-    if (!bug) { setState("", "bad"); return; }
+  // Firmware detection
+  var key = null, fwnum = null;
+  var m = /PlayStation\s+4[\/ ](\d+)\.(\d+)/.exec(navigator.userAgent);
+  if (m) {
+    var minor = parseInt(m[2], 16);
+    key = m[1] + "." + (minor < 16 ? "0" : "") + minor.toString(16);
+    fwnum = parseInt(m[1], 10) * 100 + minor;
+  }
 
-    var target = (bug === "lapse" ? "lapse.html" : "poops.html")
-        + location.search;
-    function go() { setState("loading " + bug + " chain...", "warn");
-                    location.replace(target); }
+  var bug = null, reason = "";
+  if (!key) reason = "not a PS4 user-agent";
+  else if (fwnum === 1302 || fwnum === 1304) { bug = "poops"; reason = key + " → poops"; }
+  else reason = key + " → unsupported (only 13.02/13.04)";
 
-    function waitForTap(msg, action) {
-        setState(msg, "warn");
-        function fire() {
-            window.removeEventListener("click", fire);
-            window.removeEventListener("keydown", fire);
-            action();
-        }
-        window.addEventListener("click", fire);
-        window.addEventListener("keydown", fire);
-    }
+  info.innerHTML =
+    "firmware: <b>" + (key || "unknown") + "</b>\n" +
+    "chain:    <b>" + (bug || "none") + "</b>\n" +
+    "reason:   " + reason;
+  info.className = bug ? "ok" : "bad";
 
-    var ac = window.applicationCache;
-    if (!ac || !document.documentElement.hasAttribute("manifest")) {
-        go();
-    } else if (!navigator.onLine) {
-        setCache("offline -- from cache", true);
-        go();
-    } else if (ac.status === ac.IDLE) {
-        setCache("cached", true);
-        go();
-    } else if (ac.status === ac.UPDATEREADY) {
-        try { ac.swapCache(); } catch (e) {}
-        setCache("update downloaded", true);
-        waitForTap("update ready -- press x or tap to reload & run",
-                   function () { location.reload(); });
-    } else {
-        setCache("checking cache...");
-        ac.addEventListener("downloading",
-            function () { setCache("caching for offline (first run)..."); }, false);
-        ac.addEventListener("progress", function (e) {
-            if (e && e.total)
-                setCache("caching " + Math.round((e.loaded / e.total) * 100) + "%");
-        }, false);
-
-        ac.addEventListener("cached", function () {
-            setCache("cached for offline use", true);
-            waitForTap("cached (first run) -- press x or tap to run", go);
-        }, false);
-        ac.addEventListener("updateready", function () {
-            try { ac.swapCache(); } catch (e) {}
-            setCache("update downloaded", true);
-            waitForTap("update ready -- press x or tap to reload & run",
-                       function () { location.reload(); });
-        }, false);
-
-        ac.addEventListener("noupdate", function () {
-            setCache("cached -- offline ready", true);
-            go();
-        }, false);
-        ac.addEventListener("error", function () {
-            setCache("cache unavailable");
-            waitForTap("cache failed -- press x or tap to run anyway", go);
-        }, false);
-        ac.addEventListener("obsolete", function () {
-            setCache("cache obsolete");
-            waitForTap("cache obsolete -- press x or tap to run", go);
-        }, false);
-    }
+  go.disabled = !bug;
+  go.addEventListener("click", function () {
+    var id = tid.value.trim() || "UNK";
+    try { localStorage.setItem("h4ss9m_tester", id); } catch (e) {}
+    var qs = "?pair=1&id=" + encodeURIComponent(id);
+    if (note.value.trim()) qs += "&note=" + encodeURIComponent(note.value.trim());
+    location.replace("poops.html" + qs);
+  });
 })();
 </script>
 </body>
