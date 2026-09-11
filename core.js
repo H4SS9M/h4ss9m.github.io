@@ -1,4 +1,4 @@
-let DRAIN_COUNT = 512;
+let DRAIN_COUNT = 256;
 const AUTO_RETRY_DELAY_MS = 50;
 
 const K = 2;
