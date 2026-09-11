@@ -32,10 +32,92 @@ function terse(s) {
     if (s.length > 140) s = s.slice(0, 140) + "...";
     return s;
 }
+// ══════════════════════════════════════════════════════════════════════
+//  LOG FILTER — pantalla simplificada, log completo en memoria
+// ══════════════════════════════════════════════════════════════════════
+const SCREEN_MODE = params.get("screen") || "loud";   // "loud" (default) o "full"
+const SCREEN_FULL = SCREEN_MODE === "full";
+
+// Etiquetas que NUNCA se muestran en pantalla (ruido)
+const HIDE_RE = new RegExp("^(" + [
+    "AUTO-RETRY-SCHEDULED", "AUTO-RETRY-AFTER-FAILURE",
+    "AUTO-RETRY-NOT-SCHEDULED", "AUTO-RETRY-CANCELLED",
+    "WORKER-INFO", "WORKER-ONERROR",
+    "KREAD-BEGIN", "KREAD-RETRY", "KREAD-DRAINED", "KREAD-WAKE",
+    "KREAD-UIO-JOINED", "KREAD-UNWIND", "KREAD-UNWOUND", "KREAD-REFUSED",
+    "UIO-LAND$", "UIO-LANDED", "UIO-LAND-ROUND", "UIO-LAND-TIMEOUT",
+    "UIO-LAND-REFUSED",
+    "FAKEUIO-LAND$", "FAKEUIO-ROUND", "FAKEUIO-TIMEOUT", "FAKEUIO-REFUSED",
+    "KWRITE-BEGIN$", "KWRITE-RETRY", "KWRITE-REFUSED",
+    "SCANCHUNK-CLAMPED", "REFIND-UNVALIDATED", "TRIPLETS-LOST",
+    "TRIPLET-VALIDATE", "TRIPLET-RE", "TRIPLET-UW", "TRIPLET-KQ",
+    "PIPE-FP-FALLBACK", "PIPE-FDATA-FALLBACK", "PIPE-REFCNT", "KV-FGET",
+    "SHORT-READS", "FREERTHDR-REFUSED",
+    "KQUEUE-ROUND", "KQUEUE-EMFILE",
+    "THREAD-ATTRS-SAVED", "WORKER-POOLS", "PIPEBUF-AIM",
+    "GADGET-BAD$", "FREE-RTHDR"
+].join("|") + ")$");
+
+// Etiquetas que se muestran SOLO la primera vez
+const ONCE_RE = new RegExp("^(" + [
+    "STUBS", "STUB-PROBE", "IOV-SS", "WORKERS-PINNED", "BOOT",
+    "BASES", "PRIMITIVE-OK", "SWEEP-SKIPPED", "SWEEP$",
+    "PAIR-STATUS", "KPATCH-BLOB", "PAYLOAD-BLOB", "FW$", "FW-STATUS",
+    "WORKER-POOLS", "EXPM1-RESTORED", "THREAD-ATTRS-RESTORED",
+    "WORKER-ATTRS-RESTORED", "SOCKETS-CLOSED", "UAF-REMOVED"
+].join("|") + ")$");
+const seenOnce = new Set();
+
+// Etiquetas repetitivas: mostrar solo las primeras N
+const N_LIMIT = {
+    "ATTEMPT": 2, "ATTEMPT-SKIP": 2, "ATTEMPT-RETRY": 2,
+    "IOV-RETS": 2, "IOV-PARKED": 2, "POST-TRIPLE": 2,
+    "TRIPLET-T1": 3, "TRIPLET-T2": 3, "KQUEUE-LEAK": 2,
+    "KREAD-BEGIN": 2, "DUMP-": 2, "PIPE-FP$": 2,
+};
+const seenCount = {};
+
+// Siempre visibles (override de HIDE_RE)
+const ALWAYS_RE = /FAIL|ERROR|THREW|CRASH|PANIC|UAF-ARMED|DOUBLE-FREE|TRIPLE-FREE|TRIPLETS|JAILBROKEN|KERNEL-PATCHED|PAYLOAD-RUNNING|STEP10-|FAILED-STAGE|REBOOT-REQUIRED|KERNEL-BASE|ALL DONE|CONSOLE-REBOOTED/i;
+
+function shouldShow(tag, detail) {
+    if (SCREEN_FULL) return true;
+    const full = tag + " " + (detail || "");
+    if (ALWAYS_RE.test(full)) return true;
+    if (HIDE_RE.test(tag)) return false;
+    if (ONCE_RE.test(tag)) {
+        if (seenOnce.has(tag)) return false;
+        seenOnce.add(tag);
+        return true;
+    }
+    if (tag in N_LIMIT) {
+        seenCount[tag] = (seenCount[tag] || 0) + 1;
+        return seenCount[tag] <= N_LIMIT[tag];
+    }
+    // Por defecto: mostrar
+    return true;
+}
+
+// Log completo para el dump
+if (typeof window !== "undefined" && !window.__poopsLog) {
+    window.__poopsLog = [];
+}
+
 function mark(tag, detail) {
     const raw = detail;
     detail = terse(detail);
-    lines.push(tag + (detail == null || detail === "" ? "" : "  " + detail));
+    const line = tag + (detail == null || detail === "" ? "" : "  " + detail);
+
+    // SIEMPRE al log completo
+    if (window.__poopsLog) window.__poopsLog.push(line);
+
+    // Siempre al XHR interno (compatibilidad)
+    post(tag, raw);
+
+    // Decidir si va a pantalla
+    if (!shouldShow(tag, detail)) return;
+
+    lines.push(line);
     const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
     outEl.innerHTML = lines.map(function (l) {
         l = esc(l);
@@ -45,7 +127,6 @@ function mark(tag, detail) {
         return c ? '<span class="' + c + '">' + l + "</span>" : l;
     }).join("\n");
     outEl.scrollTop = outEl.scrollHeight;
-    post(tag, raw);
 }
 
 function trace(tag, detail) { if (VERBOSE) mark(tag, detail); else post(tag, detail); }
