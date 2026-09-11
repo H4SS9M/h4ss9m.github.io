@@ -182,7 +182,7 @@ let allDone = false;
 
         const PAIR_ON = params.get("pair") === "1" || true;
         const SWEEP_CYCLES = params.has("sweep")
-            ? parseInt(params.get("sweep"), 10) : 6;
+            ? parseInt(params.get("sweep"), 10) : 0;
         const SWEEP_MS = params.has("sweepms")
             ? parseInt(params.get("sweepms"), 10) : 60;
         const SWEEP_MB = params.has("sweepmb")
