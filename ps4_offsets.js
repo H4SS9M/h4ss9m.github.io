@@ -10,6 +10,7 @@ export const REQUIRED_KEYS = [
     "wk_MOV_RDI_RSI_30_CALL", "wk_POP_RAX_MOV_RAX_JMP_18",
     "wk_PUSH_RBP_MOV_RBP_RSP_10", "wk_MOV_RDI_RAX_8_CALL_20",
     "wk_MOV_RDX_RAX_18_CALL_10", "wk_PUSH_RDX_POP_RSP_RET",
+    "wk_MOV_R10_PTR_RAX_RET",                    // ← NUEVO
     "pivot_view_sp", "wk_ArrayBuffer_m_impl", "wk_ArrayBuffer_m_contents_m_data",
     "wk___imp___error", "k__error",
     "k_scan_stage1", "k_scan_stage2",
@@ -36,7 +37,6 @@ export const PS4 = {
     alias_of: "13.00",
     kpatch: "1302.bin",
 
-    // WebKit (identico a 13.00)
     wk_expm1_builtin:                 0x2586880,
     wk_JSFunction_m_function:         0x28,
     wk_POP_RDI_RET:                   0x5c480,
@@ -54,6 +54,12 @@ export const PS4 = {
     wk_PUSH_RBP_MOV_RBP_RSP_10:      0x25bae0,
     wk_MOV_RDI_RAX_8_CALL_20:        0x4a0406,
     wk_MOV_RDX_RAX_18_CALL_10:       0x1ec3ada,
+
+    // MOV R10, [RAX] ; RET  → bytes 4C 8B 10 C3
+    // Verificar en Ghidra antes de usar: en 0x49e57a la instrucción
+    // siguiente debe ser C3 (ret).
+    wk_MOV_R10_PTR_RAX_RET:           0x49e57a,
+
     pivot_view_sp:                    0x38,
     wk_ArrayBuffer_m_impl:            0x10,
     wk_ArrayBuffer_m_contents_m_data: 0x10,
@@ -85,7 +91,6 @@ export const PS4 = {
     alias_of: "13.02",
     kpatch: "1304.bin",
 
-    // WebKit (13.04 dump). Los offsets faltantes deben completarse con addfw.
     wk_expm1_builtin:                 0x2586880,   // placeholder, verificar
     wk_JSFunction_m_function:         0x28,
     wk_POP_RDI_RET:                   0x060480,
@@ -103,6 +108,11 @@ export const PS4 = {
     wk_PUSH_RBP_MOV_RBP_RSP_10:      0x25bae0,
     wk_MOV_RDI_RAX_8_CALL_20:        0x4a0406,
     wk_MOV_RDX_RAX_18_CALL_10:       0x1ec3ada,
+
+    // Placeholder: copia de 13.02. En 13.04 el WebKit fue recompilado.
+    // Re-verificar en el dump de zecoxao.
+    wk_MOV_R10_PTR_RAX_RET:           0x49e57a,
+
     pivot_view_sp:                    0x38,
     wk_ArrayBuffer_m_impl:            0x10,
     wk_ArrayBuffer_m_contents_m_data: 0x10,
