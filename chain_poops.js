@@ -68,7 +68,9 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
               ioctl: 0x36, mmap: 0x1dd, jitshm_create: 0x215, kexec: 0x295 };
 
 const NETEVENT_SET_QUEUE   = 0x20000003;
-const NETEVENT_CLEAR_QUEUE = 0x20000007;
+const NETEVENT_CLEAR_QUEUE = params.has("clear")
+    ? parseInt(params.get("clear"), 16) >>> 0
+    : 0x20000007;
 
 const AF_UNIX = 1, AF_INET6 = 28, SOCK_STREAM = 1;
 const IPPROTO_IPV6 = 41, IPV6_RTHDR = 51;
