@@ -34,6 +34,7 @@
            letter-spacing: .1em; text-transform: uppercase; }
   #tg    { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
   #tg.on { color: var(--ok); }
+  #tg.err { color: var(--bad); }
   main   { flex: 1 1 auto; overflow: hidden; }
   pre#out {
     margin: 0; padding: 16px 20px; height: 100%; overflow: auto;
@@ -83,12 +84,8 @@ var TG_TOKEN    = "8520998420:AAFMs7t2Sbnk8U6baZrEE5dUNVncTdQ__g0";
 var TG_CHAT     = "7068507380";
 var DC_WEBHOOK  = "https://discord.com/api/webhooks/1547263223290535978/U1mSXTwgWYGvlHISfv4l_Y59eM7Epi5VEw_u7QPvYNmBr7JqFxg9UaITFTMnx2Lv7hZ7";
 
-
 var TG_ENABLED  = TG_TOKEN.length > 20 && TG_CHAT.length > 3;
 var DC_ENABLED  = DC_WEBHOOK.indexOf("http") === 0;
-
-// Filtro para no saturar: solo reenvía líneas relevantes
-var FORWARD_RE  = /PASS|FAIL|ERROR|THREW|MISMATCH|TIMEOUT|JAILBROKEN|KERNEL-PATCHED|PAYLOAD-RUNNING|TRIPLETS|PAIR-STATUS|BASES|UAF-ARMED|DOUBLE-FREE|TRIPLE-FREE|FIRMWARE|H4SS9M/i;
 
 // ══════════════════════════════════════════════════════════════════════
 //  ESTADO
@@ -105,14 +102,46 @@ var tgEl    = document.getElementById("tg");
 tidEl.textContent = "tester: " + testerId + (testerNote ? " (" + testerNote + ")" : "");
 
 if (TG_ENABLED || DC_ENABLED) {
-  tgEl.textContent = "tg:" + (TG_ENABLED ? "on" : "off") + " dc:" + (DC_ENABLED ? "on" : "off");
+  tgEl.textContent = "tg:" + (TG_ENABLED ? "?" : "off") + " dc:" + (DC_ENABLED ? "on" : "off");
   tgEl.className = "on";
 } else {
-  tgEl.textContent = "tg:on dc:on";
+  tgEl.textContent = "tg:off dc:off";
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  FORWARDERS
+//  VERIFICACIÓN DE TELEGRAM AL ARRANCAR
+// ══════════════════════════════════════════════════════════════════════
+(function verifyTg() {
+  if (!TG_ENABLED) return;
+  try {
+    var x = new XMLHttpRequest();
+    x.open("GET", "https://api.telegram.org/bot" + TG_TOKEN + "/getMe", true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status === 200) {
+        try {
+          var r = JSON.parse(x.responseText);
+          if (r.ok && r.result) {
+            tgEl.textContent = "tg:@" + r.result.username + " dc:" + (DC_ENABLED ? "on" : "off");
+            tgEl.className = "on";
+            return;
+          }
+        } catch (e) {}
+      }
+      tgEl.textContent = "tg:ERR" + x.status + " dc:" + (DC_ENABLED ? "on" : "off");
+      tgEl.className = "err";
+      console.warn("Telegram getMe fallo: " + x.status + " " + x.responseText);
+    };
+    x.send();
+  } catch (e) {
+    tgEl.textContent = "tg:THROW dc:" + (DC_ENABLED ? "on" : "off");
+    tgEl.className = "err";
+    console.warn("Telegram getMe threw:", e);
+  }
+})();
+
+// ══════════════════════════════════════════════════════════════════════
+//  FORWARDERS — solo envían el dump completo
 // ══════════════════════════════════════════════════════════════════════
 var tgQueue = [], tgSending = false;
 var dcQueue = [], dcSending = false;
@@ -123,10 +152,11 @@ function esc(s) {
 
 function tgPush(text) {
   if (!TG_ENABLED) return;
-  var MAX = 3600;
-  for (var i = 0; i < text.length; i += MAX) tgQueue.push(text.slice(i, i+MAX));
+  var MAX = 3500;
+  for (var i = 0; i < text.length; i += MAX) tgQueue.push(text.slice(i, i + MAX));
   tgFlush();
 }
+
 function tgFlush() {
   if (!TG_ENABLED || tgSending || !tgQueue.length) return;
   tgSending = true;
@@ -137,24 +167,45 @@ function tgFlush() {
     x.setRequestHeader("Content-Type", "application/json");
     x.onreadystatechange = function () {
       if (x.readyState !== 4) return;
-      if (x.status !== 200 && x.status !== 0) tgQueue.unshift(chunk);
+      var ok = (x.status === 200);
+      if (!ok) {
+        console.warn("TG sendMessage " + x.status + ": " + x.responseText);
+        // 429 = rate limit, reintentar con delay largo
+        if (x.status === 429) {
+          tgQueue.unshift(chunk);
+          tgSending = false;
+          setTimeout(tgFlush, 8000);
+          return;
+        }
+        // 4xx = error permanente, descartar y no reintentar
+        if (x.status >= 400 && x.status < 500) {
+          tgSending = false;
+          setTimeout(tgFlush, 1100);
+          return;
+        }
+      }
       tgSending = false;
-      setTimeout(tgFlush, 1100);
+      setTimeout(tgFlush, 1500);
     };
     x.send(JSON.stringify({
       chat_id: TG_CHAT,
-      text: "<pre>" + esc(chunk) + "</pre>",
-      parse_mode: "HTML",
+      text: chunk,
       disable_web_page_preview: true
     }));
-  } catch (e) { tgSending = false; }
+  } catch (e) {
+    console.warn("TG threw:", e);
+    tgSending = false;
+    setTimeout(tgFlush, 3000);
+  }
 }
 
 function dcPush(text) {
   if (!DC_ENABLED) return;
-  dcQueue.push(text);
+  var MAX = 1900;
+  for (var i = 0; i < text.length; i += MAX) dcQueue.push(text.slice(i, i + MAX));
   dcFlush();
 }
+
 function dcFlush() {
   if (!DC_ENABLED || dcSending || !dcQueue.length) return;
   dcSending = true;
@@ -166,56 +217,52 @@ function dcFlush() {
     x.onreadystatechange = function () {
       if (x.readyState !== 4) return;
       dcSending = false;
-      setTimeout(dcFlush, 600);
+      setTimeout(dcFlush, 800);
     };
-    x.send(JSON.stringify({
-      content: "**" + testerId + "** · ```\n" + chunk.slice(0, 1900) + "\n```"
-    }));
+    x.send(JSON.stringify({ content: chunk }));
   } catch (e) { dcSending = false; }
 }
 
-function forwardHeader() {
-  var hdr = "== H4SS9M · " + testerId + (testerNote ? " (" + testerNote + ")" : "") + " ==\n"
-          + "UA: "   + navigator.userAgent + "\n"
-          + "URL: "  + location.href + "\n"
-          + "TIME: " + new Date().toISOString() + "\n";
-  tgPush(hdr);
-  dcPush(hdr);
+// ══════════════════════════════════════════════════════════════════════
+//  DUMP COMPLETO — única forma de enviar
+// ══════════════════════════════════════════════════════════════════════
+function buildFullDump(reason) {
+  var log = (window.__poopsLog && window.__poopsLog.length)
+    ? window.__poopsLog.join("\n")
+    : (outEl.textContent || "");
+  return "== " + reason + " · " + testerId
+       + (testerNote ? " (" + testerNote + ")" : "") + " ==\n"
+       + "UA: "   + navigator.userAgent + "\n"
+       + "URL: "  + location.href + "\n"
+       + "TIME: " + new Date().toISOString() + "\n"
+       + "LINES: " + (window.__poopsLog ? window.__poopsLog.length : 0) + "\n\n"
+       + log;
+}
+
+function sendFullDump(reason) {
+  var full = buildFullDump(reason);
+  tgPush(full);
+  dcPush(full);
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  OBSERVADOR DEL LOG (captura cualquier cosa que poops.js escriba)
+//  OBSERVADOR DEL LOG — solo actualiza el header, NO reenvía nada
 // ══════════════════════════════════════════════════════════════════════
 var lastText = "";
-
-function checkLog() {
+function updateState() {
   var cur = outEl.textContent || "";
   if (cur.length <= lastText.length) return;
-
   var delta = cur.slice(lastText.length);
   lastText = cur;
-
   var newLines = delta.split("\n").filter(function (l) { return l.trim(); });
-  newLines.forEach(function (l) {
-    if (FORWARD_RE.test(l)) {
-      tgPush(l);
-      dcPush(l);
-    }
-  });
-
-  // Actualizar el estado del header con la última línea
   if (newLines.length) {
     var last = newLines[newLines.length - 1].trim();
     if (last.length < 120) stateEl.textContent = last.toLowerCase();
   }
 }
-
-// Poll cada 400ms (barato, no bloquea)
-setInterval(checkLog, 400);
-
-// También observador por si hay cambios rápidos
+setInterval(updateState, 400);
 if (window.MutationObserver) {
-  new MutationObserver(checkLog).observe(outEl, {
+  new MutationObserver(updateState).observe(outEl, {
     childList: true, characterData: true, subtree: true
   });
 }
@@ -226,24 +273,23 @@ if (window.MutationObserver) {
 document.getElementById("btn-clear").addEventListener("click", function () {
   outEl.textContent = "";
   lastText = "";
+  // NO borramos window.__poopsLog para no perder el histórico
 });
+
 document.getElementById("btn-send").addEventListener("click", function () {
-  var full = "== MANUAL DUMP " + testerId + " ==\n" + outEl.textContent;
-  tgPush(full);
-  dcPush(full);
+  sendFullDump("MANUAL DUMP");
+  stateEl.textContent = "dump enviado";
 });
 
 // Enviar todo al cerrar
 window.addEventListener("beforeunload", function () {
-  var full = "== FINAL " + testerId + " ==\n" + outEl.textContent;
-  tgPush(full);
-  dcPush(full);
+  sendFullDump("FINAL");
 });
 
 // ══════════════════════════════════════════════════════════════════════
-//  CABECERA + ARRANQUE DEL EXPLOIT
+//  ARRANQUE DEL EXPLOIT
 // ══════════════════════════════════════════════════════════════════════
-forwardHeader();
+console.log("[H4SS9M] Configuración: TG=" + TG_ENABLED + " DC=" + DC_ENABLED);
 </script>
 
 <!-- El exploit -->
