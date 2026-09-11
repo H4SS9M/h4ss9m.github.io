@@ -436,7 +436,7 @@ let allDone = false;
         // NETCONTROL: a1=0, a4=4, eventos int64
         function netevent(sock, event) {
             argDv.setUint32(0, sock >>> 0, true);
-            const dummy = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
+            const r = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
             return { rv: r, err: r === -1 ? errno() : 0 };
         }
 
