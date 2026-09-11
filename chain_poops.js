@@ -283,6 +283,24 @@ let allDone = false;
             stubAddr.set(num, libkernelBase.add32(o)); need.delete(num); scanned++;
         }
         mark("STUBS", "seeded=" + seeded + " scanned=" + scanned);
+
+        // ── SONDA: verificar si el stub ya hace mov r10, rcx ──
+        // Si los bytes 7-9 son 49 89 CA, el stub ya copia RCX→R10
+        // y el fixup de R10 no es necesario. Si son otra cosa,
+        // el fixup es obligatorio.
+        {
+            const probe = stubAddr.get(20);   // getpid
+            if (probe) {
+                const b = [];
+                for (let i = 0; i < 16; ++i) b.push(p.read1(probe.add32(i)));
+                mark("STUB-PROBE", "syscall20 " +
+                    b.map(v => v.toString(16).padStart(2, "0")).join(" "));
+            } else {
+                mark("STUB-PROBE", "syscall20 NOT FOUND in stubAddr");
+            }
+        }
+        // ── FIN SONDA ──
+
         const miss = Object.keys(SYS).filter(k => !stubAddr.has(SYS[k]));
         if (!check("syscall-page-needs-stub", miss.length === 0,
             miss.join(","))) return;
