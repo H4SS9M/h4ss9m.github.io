@@ -774,9 +774,9 @@ let allDone = false;
                 break;
             }
             state("attempt " + attempt + "...", "warn");
-            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
 
             const dummy = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
+            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
             if (dummy === -1) { mark("ATTEMPT-SKIP", "socket failed"); continue; }
             const reg = netevent(dummy, NETEVENT_SET_QUEUE);
             if (reg.rv === -1) {
