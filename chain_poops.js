@@ -436,7 +436,7 @@ let allDone = false;
         // NETCONTROL: a1=0, a4=4, eventos int64
         function netevent(sock, event) {
             argDv.setUint32(0, sock >>> 0, true);
-            const r = sc(SYS.netcontrol, 0, event, argAddr, 8).i32;
+            const r = sc(SYS.netcontrol, -1, event, argAddr, 4).i32;
             return { rv: r, err: r === -1 ? errno() : 0 };
         }
 
