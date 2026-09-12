@@ -503,7 +503,7 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
                                      function netevent(sock, event) {
                                          argDv.setUint32(0, sock >>> 0, true);
-                                         const r = sc(SYS.netcontrol, 0, event, argAddr, 8).i32;
+                                         const r = sc(SYS.netcontrol, 0, event, argAddr, 4).i32;
                                          return { rv: r, err: r === -1 ? errno() : 0 };
                                      }
 
@@ -878,17 +878,13 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
                     const reg2 = netevent(dummy, NETEVENT_SET_QUEUE);
                     mark("SET-QUEUE-2", "fd=" + dummy + " rv=" + reg2.rv
                     + (reg2.rv === -1 ? " errno=" + reg2.err : ""));
-                    if ((reg2.rv === -1 && reg2.err === 5) || reg2.rv === 0) {
+                    if (reg2.rv === -1 && reg2.err === 5) {
                         armed = true; via = "second-set";
-                        mark("OVERDROP-ARMED", "fd=" + dummy
-                        + " via=second-set"
-                        + " rv2=" + reg2.rv
-                        + (reg2.rv === -1 ? " errno2=" + reg2.err : ""));
+                        mark("OVERDROP-ARMED", "fd=" + dummy + " via=second-set" + " rv2=" + reg2.rv + " errno2=" + reg2.err);
                     } else {
-                        mark("ATTEMPT-SKIP", "SET2 unexpected rv=" + reg2.rv
-                        + " errno=" + reg2.err);
+                        mark("ATTEMPT-SKIP", "SET2 unexpected rv=" + reg2.rv + " errno=" + reg2.err);
                         sc(SYS.close, dummy); continue;
-                    }
+}
                 } else if (reg1.rv === -1 && reg1.err === 5) {
                     // EIO on first call = all three slots already active.
                     // FUN_00964d10's error branch already dropped a reference
