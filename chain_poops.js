@@ -206,7 +206,13 @@ let allDone = false;
         const NUM_IOV_SPRAY = params.has("spray")
             ? parseInt(params.get("spray"), 10) : 0x200;
         const { key, off } = offsetsFor(navigator.userAgent);
-        mark("FW", key || "(not a PS4 UA)");
+        // UA simplificado: "PS4-13.02" en lugar de todo el Mozilla dump
+        function prettyFW(ua) {
+            const m = /PlayStation\s+([45])[\/ ](\d+)\.(\d+)/.exec(ua || "");
+            if (!m) return "non-PS";
+            return "PS" + m[1] + "-" + m[2] + "." + m[3];
+        }
+        mark("FW", prettyFW(navigator.userAgent));
         if (!off) { state("no offsets for this firmware", "bad"); return; }
         mark("FW-STATUS", off.fw_status || "none");
         mark("PLAN", "iov_workers=" + NUM_IOV_WORKER + " attempts=" + NUM_ATTEMPT
