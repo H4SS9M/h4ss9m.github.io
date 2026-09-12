@@ -80,12 +80,20 @@
 // ══════════════════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════════════════
+// Proxy (Cloudflare Worker). Vacío = no se envía nada.
+// Cuando montes el worker, pon aquí la URL completa, por ejemplo:
+//   var PROXY_URL = "https://h4ss9m-log.TU-SUBDOMINIO.workers.dev/log";
+var PROXY_URL   = "";
+
+// Fallback directo (obsoleto, solo por si no quieres usar proxy todavía).
+// Si PROXY_URL está vacío y estos tienen valores, se usarán directamente.
 var TG_TOKEN    = "";
 var TG_CHAT     = "";
 var DC_WEBHOOK  = "";
 
-var TG_ENABLED  = TG_TOKEN.length > 20 && TG_CHAT.length > 3;
-var DC_ENABLED  = DC_WEBHOOK.indexOf("http") === 0;
+var PROXY_ENABLED = PROXY_URL.indexOf("http") === 0;
+var TG_ENABLED    = !PROXY_ENABLED && TG_TOKEN.length > 20 && TG_CHAT.length > 3;
+var DC_ENABLED    = !PROXY_ENABLED && DC_WEBHOOK.indexOf("http") === 0;
 
 // ══════════════════════════════════════════════════════════════════════
 //  ESTADO
@@ -101,54 +109,25 @@ var tgEl    = document.getElementById("tg");
 
 tidEl.textContent = "tester: " + testerId + (testerNote ? " (" + testerNote + ")" : "");
 
-if (TG_ENABLED || DC_ENABLED) {
-  tgEl.textContent = "tg:" + (TG_ENABLED ? "?" : "off") + " dc:" + (DC_ENABLED ? "on" : "off");
-  tgEl.className = "on";
-} else {
-  tgEl.textContent = "tg:off dc:off";
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  VERIFICACIÓN DE TELEGRAM AL ARRANCAR
-// ══════════════════════════════════════════════════════════════════════
-(function verifyTg() {
-  if (!TG_ENABLED) return;
-  try {
-    var x = new XMLHttpRequest();
-    x.open("GET", "https://api.telegram.org/bot" + TG_TOKEN + "/getMe", true);
-    x.onreadystatechange = function () {
-      if (x.readyState !== 4) return;
-      if (x.status === 200) {
-        try {
-          var r = JSON.parse(x.responseText);
-          if (r.ok && r.result) {
-            tgEl.textContent = "tg:@" + r.result.username + " dc:" + (DC_ENABLED ? "on" : "off");
-            tgEl.className = "on";
-            return;
-          }
-        } catch (e) {}
-      }
-      tgEl.textContent = "tg:ERR" + x.status + " dc:" + (DC_ENABLED ? "on" : "off");
-      tgEl.className = "err";
-      console.warn("Telegram getMe fallo: " + x.status + " " + x.responseText);
-    };
-    x.send();
-  } catch (e) {
-    tgEl.textContent = "tg:THROW dc:" + (DC_ENABLED ? "on" : "off");
-    tgEl.className = "err";
-    console.warn("Telegram getMe threw:", e);
+// Mostrar estado del transporte
+(function showTransport() {
+  if (PROXY_ENABLED) {
+    tgEl.textContent = "proxy:on";
+    tgEl.className = "on";
+  } else if (TG_ENABLED || DC_ENABLED) {
+    tgEl.textContent = "tg:" + (TG_ENABLED ? "on" : "off")
+                     + " dc:" + (DC_ENABLED ? "on" : "off");
+    tgEl.className = "on";
+  } else {
+    tgEl.textContent = "tg:off dc:off";
   }
 })();
 
 // ══════════════════════════════════════════════════════════════════════
-//  FORWARDERS — solo envían el dump completo
+//  FORWARDERS DIRECTOS (fallback si no hay proxy)
 // ══════════════════════════════════════════════════════════════════════
 var tgQueue = [], tgSending = false;
 var dcQueue = [], dcSending = false;
-
-function esc(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
 
 function tgPush(text) {
   if (!TG_ENABLED) return;
@@ -169,15 +148,12 @@ function tgFlush() {
       if (x.readyState !== 4) return;
       var ok = (x.status === 200);
       if (!ok) {
-        console.warn("TG sendMessage " + x.status + ": " + x.responseText);
-        // 429 = rate limit, reintentar con delay largo
         if (x.status === 429) {
           tgQueue.unshift(chunk);
           tgSending = false;
           setTimeout(tgFlush, 8000);
           return;
         }
-        // 4xx = error permanente, descartar y no reintentar
         if (x.status >= 400 && x.status < 500) {
           tgSending = false;
           setTimeout(tgFlush, 1100);
@@ -193,7 +169,6 @@ function tgFlush() {
       disable_web_page_preview: true
     }));
   } catch (e) {
-    console.warn("TG threw:", e);
     tgSending = false;
     setTimeout(tgFlush, 3000);
   }
@@ -224,15 +199,56 @@ function dcFlush() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+//  PROXY (preferido cuando está configurado)
+// ══════════════════════════════════════════════════════════════════════
+function proxySend(reason, fullLog) {
+  var x = new XMLHttpRequest();
+  x.open("POST", PROXY_URL, true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    if (x.status === 200) {
+      try {
+        var r = JSON.parse(x.responseText);
+        if (r && r.ip_hash) {
+          tgEl.textContent = "proxy:on id:" + r.ip_hash.slice(0, 8);
+        }
+        stateEl.textContent = "dump enviado";
+      } catch (e) {
+        stateEl.textContent = "dump enviado";
+      }
+    } else if (x.status === 429) {
+      stateEl.textContent = "rate limited — espera 1 min";
+    } else {
+      stateEl.textContent = "dump falló (" + x.status + ")";
+    }
+  };
+  x.send(JSON.stringify({
+    test:   testerId,
+    note:   testerNote,
+    reason: reason,
+    log:    fullLog
+  }));
+}
+
+// ══════════════════════════════════════════════════════════════════════
 //  DUMP COMPLETO — única forma de enviar
 // ══════════════════════════════════════════════════════════════════════
+function prettyUA(ua) {
+    const m = /PlayStation\s+([45])[\/ ](\d+)\.(\d+)/.exec(ua || "");
+    if (!m) return String(ua || "").slice(0, 60);
+    const engine = /WebKit\/(\d+)/.exec(ua);
+    return "PS" + m[1] + "-" + m[2] + "." + m[3]
+         + (engine ? " wk" + engine[1] : "");
+}
+
 function buildFullDump(reason) {
   var log = (window.__poopsLog && window.__poopsLog.length)
     ? window.__poopsLog.join("\n")
     : (outEl.textContent || "");
   return "== " + reason + " · " + testerId
        + (testerNote ? " (" + testerNote + ")" : "") + " ==\n"
-       + "UA: "   + navigator.userAgent + "\n"
+       + "UA:      " + prettyUA(navigator.userAgent) + "\n"
        + "URL: "  + location.href + "\n"
        + "TIME: " + new Date().toISOString() + "\n"
        + "LINES: " + (window.__poopsLog ? window.__poopsLog.length : 0) + "\n\n"
@@ -241,8 +257,12 @@ function buildFullDump(reason) {
 
 function sendFullDump(reason) {
   var full = buildFullDump(reason);
-  tgPush(full);
-  dcPush(full);
+  if (PROXY_ENABLED) {
+    proxySend(reason, full);
+  } else {
+    tgPush(full);
+    dcPush(full);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -278,7 +298,6 @@ document.getElementById("btn-clear").addEventListener("click", function () {
 
 document.getElementById("btn-send").addEventListener("click", function () {
   sendFullDump("MANUAL DUMP");
-  stateEl.textContent = "dump enviado";
 });
 
 // Enviar todo al cerrar
@@ -289,7 +308,8 @@ window.addEventListener("beforeunload", function () {
 // ══════════════════════════════════════════════════════════════════════
 //  ARRANQUE DEL EXPLOIT
 // ══════════════════════════════════════════════════════════════════════
-console.log("[H4SS9M] Configuración: TG=" + TG_ENABLED + " DC=" + DC_ENABLED);
+console.log("[H4SS9M] Configuración: PROXY=" + PROXY_ENABLED
+    + " TG=" + TG_ENABLED + " DC=" + DC_ENABLED);
 </script>
 
 <!-- El exploit -->
