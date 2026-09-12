@@ -503,7 +503,7 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
                                      function netevent(sock, event) {
                                          argDv.setUint32(0, sock >>> 0, true);
-                                         const r = sc(SYS.netcontrol, -1, event, argAddr, 8).i32;
+                                         const r = sc(SYS.netcontrol, 0, event, argAddr, 8).i32;
                                          return { rv: r, err: r === -1 ? errno() : 0 };
                                      }
 
